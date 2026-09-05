@@ -1,0 +1,330 @@
+/* ==========================================================================
+   app.js — 화면을 그리고 사용자의 동작을 처리합니다.
+   저장 위치는 전혀 모릅니다. MemoStore에게 시키기만 합니다.
+
+   [고친 것]
+   1. 전에는 저장·수정·삭제·검색 때마다 render()가 목록 DOM을 전부 부수고
+      다시 만들었습니다. 검색창에 "안녕"을 치면 두 번 전부 재생성됐습니다.
+      지금은 각 메모의 DOM을 딱 한 번만 만들고 rows 맵에 들고 있습니다.
+      - 검색: 만들어 둔 행을 숨기고 보이기만 합니다 (DOM 생성 없음)
+      - 저장: 새 행 하나만 맨 앞에 끼웁니다
+      - 수정: 그 행의 글자만 바꿉니다
+      - 삭제: 그 행만 떼어냅니다
+      목록 전체를 다시 만드는 경로가 이제 없습니다.
+
+   2. 1분 타이머가 행마다 memos.find()를 돌려 O(n²)이었습니다.
+      지금은 "시간 표시가 아직 변할 수 있는" 메모만 live 집합에 담아두고,
+      그것만 훑습니다. 다 굳으면 타이머를 아예 멈춥니다.
+      안 보이는 탭에서는 일하지 않습니다.
+   ========================================================================== */
+
+const el = {
+  editor:   document.getElementById('editor'),
+  save:     document.getElementById('save'),
+  cancel:   document.getElementById('cancel'),
+  hint:     document.getElementById('hint'),
+  composer: document.querySelector('.composer'),
+  search:   document.getElementById('search'),
+  stream:   document.getElementById('stream'),
+  notice:   document.getElementById('notice'),
+  count:    document.getElementById('count'),
+};
+
+/** id → { memo, el, timeEl, bodyEl, lower }
+ *  lower는 검색용 소문자 사본입니다. 글자를 칠 때마다 toLowerCase()를
+ *  다시 돌리지 않기 위해 미리 만들어 둡니다. */
+const rows = new Map();
+
+/** 시간 표시가 아직 바뀔 수 있는 메모들. 이틀이 지나면 날짜로 굳어서 빠집니다. */
+const live = new Set();
+
+let ticker = null;
+let editingId = null;
+
+
+/* --- 시간 표시 ----------------------------------------------------------- */
+
+const LIVE_WINDOW = 48 * 60 * 60 * 1000;
+
+function isLive(memo) {
+  return Date.now() - memo.createdAt < LIVE_WINDOW;
+}
+
+function timeLabel(memo) {
+  const now = new Date();
+  const then = new Date(memo.createdAt);
+  const diffSec = Math.floor((now - then) / 1000);
+  const edited = memo.updatedAt - memo.createdAt > 1000 ? ' · 수정함' : '';
+
+  let when;
+  if (diffSec < 60) {
+    when = '방금';
+  } else if (diffSec < 3600) {
+    when = `${Math.floor(diffSec / 60)}분 전`;
+  } else if (now.toDateString() === then.toDateString()) {
+    when = `${Math.floor(diffSec / 3600)}시간 전`;
+  } else {
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    when = yesterday.toDateString() === then.toDateString()
+      ? `어제 ${then.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}`
+      : then.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+  return when + edited;
+}
+
+
+/* --- 행 만들기 (메모 한 건당 딱 한 번) ----------------------------------- */
+
+function toolButton(label, action, extra = '') {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'linkbtn ' + extra;
+  b.dataset.action = action;
+  b.textContent = label;
+  return b;
+}
+
+function normalTools(toolsEl) {
+  toolsEl.replaceChildren(
+    toolButton('수정', 'edit'),
+    toolButton('삭제', 'ask-delete', 'linkbtn--danger')
+  );
+}
+
+function buildRow(memo) {
+  const li = document.createElement('li');
+  li.className = 'memo';
+  li.dataset.id = memo.id;
+
+  const timeEl = document.createElement('time');
+  timeEl.className = 'memo__time';
+  timeEl.dateTime = new Date(memo.createdAt).toISOString();
+  timeEl.textContent = timeLabel(memo);
+
+  // textContent라서 메모에 <script>를 적어도 그냥 글자로 남습니다.
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'memo__body';
+  bodyEl.textContent = memo.text;
+
+  const toolsEl = document.createElement('div');
+  toolsEl.className = 'memo__tools';
+  normalTools(toolsEl);
+
+  li.append(timeEl, bodyEl, toolsEl);
+
+  const entry = { memo, el: li, timeEl, bodyEl, toolsEl, lower: memo.text.toLowerCase() };
+  rows.set(memo.id, entry);
+  if (isLive(memo)) live.add(memo.id);
+  return entry;
+}
+
+
+/* --- 화면 갱신은 전부 이 세 개로만 일어납니다 ---------------------------- */
+
+function insertRow(memo) {
+  const entry = buildRow(memo);
+  el.stream.prepend(entry.el);
+
+  entry.el.classList.add('memo--new');
+  entry.el.addEventListener('animationend', () => {
+    entry.el.classList.remove('memo--new');
+  }, { once: true });
+
+  startTicker();
+  updateCount();
+  applyFilter();
+}
+
+function refreshRow(entry) {
+  entry.bodyEl.textContent = entry.memo.text;
+  entry.lower = entry.memo.text.toLowerCase();
+  entry.timeEl.textContent = timeLabel(entry.memo);
+  applyFilter();
+}
+
+function dropRow(id) {
+  const entry = rows.get(id);
+  if (!entry) return;
+  entry.el.remove();
+  rows.delete(id);
+  live.delete(id);
+  updateCount();
+  applyFilter();
+}
+
+
+/* --- 검색: 행을 새로 만들지 않고 숨기고 보이기만 합니다 ------------------ */
+
+function applyFilter() {
+  const raw = el.search.value.trim();
+  const q = raw.toLowerCase();
+  let visible = 0;
+
+  for (const entry of rows.values()) {
+    const shouldHide = !!q && !entry.lower.includes(q);
+    if (entry.el.hidden !== shouldHide) entry.el.hidden = shouldHide;  // 바뀔 때만 건드립니다
+    if (!shouldHide) visible++;
+  }
+
+  if (visible > 0) {
+    el.notice.hidden = true;
+  } else {
+    el.notice.hidden = false;
+    el.notice.textContent = rows.size
+      ? `"${raw}"에 해당하는 메모가 없습니다.`
+      : '아직 메모가 없습니다. 위에 적고 저장하면 여기에 쌓입니다.';
+  }
+}
+
+function updateCount() {
+  el.count.textContent = rows.size ? `메모 ${rows.size}개` : '';
+}
+
+
+/* --- 1분 타이머: 아직 변할 수 있는 것만, 볼 때만 ------------------------- */
+
+function tick() {
+  if (document.hidden) return;
+
+  for (const id of live) {
+    const entry = rows.get(id);
+    if (!entry) { live.delete(id); continue; }
+
+    const label = timeLabel(entry.memo);
+    if (entry.timeEl.textContent !== label) entry.timeEl.textContent = label;
+
+    if (!isLive(entry.memo)) live.delete(id);   // 날짜로 굳었으니 더 볼 필요 없음
+  }
+
+  if (live.size === 0) { clearInterval(ticker); ticker = null; }
+}
+
+function startTicker() {
+  if (!ticker && live.size > 0) ticker = setInterval(tick, 60000);
+}
+
+// 가려져 있는 동안은 쉬었으므로, 다시 보일 때 한 번 따라잡습니다.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) tick();
+});
+
+
+/* --- 저장 / 수정 --------------------------------------------------------- */
+
+async function submit() {
+  const text = el.editor.value.trim();
+  if (!text) { el.editor.focus(); return; }
+
+  if (editingId) {
+    const entry = rows.get(editingId);
+    const updated = await MemoStore.update(editingId, text);
+    leaveEditMode();
+    // 저장소가 돌려준 객체를 다시 들고 있습니다. 지금은 같은 객체지만,
+    // 나중에 서버 API로 바꾸면 새 객체가 오므로 이렇게 해두면 그대로 동작합니다.
+    if (entry && updated) {
+      entry.memo = updated;
+      refreshRow(entry);
+    }
+  } else {
+    const memo = await MemoStore.create(text);
+    leaveEditMode();
+    insertRow(memo);
+  }
+}
+
+function enterEditMode(memo) {
+  editingId = memo.id;
+  el.editor.value = memo.text;
+  el.save.textContent = '수정 완료';
+  el.cancel.hidden = false;
+  el.composer.classList.add('is-editing');
+  el.editor.focus();
+  el.editor.setSelectionRange(memo.text.length, memo.text.length);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function leaveEditMode() {
+  editingId = null;
+  el.editor.value = '';
+  el.save.textContent = '저장';
+  el.cancel.hidden = true;
+  el.composer.classList.remove('is-editing');
+}
+
+
+/* --- 목록에서 일어나는 일 (행 하나만 건드립니다) ------------------------- */
+
+el.stream.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+
+  const entry = rows.get(btn.closest('.memo').dataset.id);
+  if (!entry) return;
+
+  switch (btn.dataset.action) {
+    case 'edit':
+      enterEditMode(entry.memo);
+      break;
+
+    // 삭제는 되돌릴 수 없으니 그 줄에서 바로 확인받습니다.
+    case 'ask-delete': {
+      const ask = document.createElement('span');
+      ask.className = 'memo__ask';
+      ask.textContent = '삭제할까요?';
+      entry.toolsEl.replaceChildren(
+        ask,
+        toolButton('삭제', 'confirm-delete', 'linkbtn--danger'),
+        toolButton('그대로 두기', 'cancel-delete')
+      );
+      break;
+    }
+
+    case 'confirm-delete':
+      await MemoStore.remove(entry.memo.id);
+      if (editingId === entry.memo.id) leaveEditMode();
+      dropRow(entry.memo.id);
+      break;
+
+    case 'cancel-delete':
+      normalTools(entry.toolsEl);
+      break;
+  }
+});
+
+
+/* --- 입력 관련 ----------------------------------------------------------- */
+
+el.save.addEventListener('click', submit);
+el.cancel.addEventListener('click', () => { leaveEditMode(); el.editor.focus(); });
+el.search.addEventListener('input', applyFilter);
+
+el.editor.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    submit();
+  }
+  if (e.key === 'Escape' && editingId) leaveEditMode();
+});
+
+
+/* --- 시작 ---------------------------------------------------------------- */
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+el.hint.textContent = MemoStore.isTemporary()
+  ? '이 브라우저에서는 저장이 유지되지 않습니다. 새로고침하면 사라집니다.'
+  : `${isMac ? '⌘' : 'Ctrl'} + Enter로 저장`;
+
+(async () => {
+  const memos = await MemoStore.list();
+
+  // 한 번에 붙여서 화면 재계산을 한 번만 일으킵니다.
+  const frag = document.createDocumentFragment();
+  for (const memo of memos) frag.appendChild(buildRow(memo).el);
+  el.stream.appendChild(frag);
+
+  updateCount();
+  applyFilter();
+  startTicker();
+  el.editor.focus();
+})();

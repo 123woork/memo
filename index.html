@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모</title>
+<meta name="description" content="개인 메모장">
+<meta name="theme-color" content="#F1F4F0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1 class="topbar__title">메모</h1>
+  <p class="topbar__count" id="count" aria-live="polite"></p>
+</header>
+
+<main class="page">
+
+  <section class="composer" aria-labelledby="composer-heading">
+    <h2 class="sr-only" id="composer-heading">새 메모 쓰기</h2>
+    <textarea
+      id="editor"
+      class="composer__field"
+      rows="4"
+      placeholder="여기에 적으세요."
+      aria-label="메모 내용"></textarea>
+    <div class="composer__bar">
+      <span class="composer__hint" id="hint"></span>
+      <div class="composer__actions">
+        <button type="button" class="btn btn--quiet" id="cancel" hidden>취소</button>
+        <button type="button" class="btn btn--primary" id="save">저장</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="searchrow">
+    <input
+      type="search"
+      id="search"
+      class="searchrow__input"
+      placeholder="메모 검색"
+      autocomplete="off"
+      aria-label="메모 검색">
+  </div>
+
+  <ul class="stream" id="stream"></ul>
+  <p class="notice" id="notice" hidden></p>
+
+</main>
+
+<script src="storage.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
