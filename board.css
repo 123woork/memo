@@ -1,0 +1,255 @@
+/* ==========================================================================
+   board.css — 게시판 전용 스타일
+   style.css 의 색·글꼴 변수와 .btn/.linkbtn/.gate/.notice 를 그대로 씁니다.
+   여기서는 게시판에만 있는 것들만 정의합니다.
+   ========================================================================== */
+
+/* hidden 속성이 아래 display 규칙에 지지 않도록 못을 박아 둡니다.
+   화면 전환을 전부 hidden 으로 하기 때문에 이 한 줄이 중요합니다. */
+[hidden] { display: none !important; }
+
+/* --- 목록 ---------------------------------------------------------------- */
+
+.board__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.board__lead {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.board__row {
+  padding: 0.9rem 0.2rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.board__link {
+  display: block;
+  color: var(--ink);
+  font-family: var(--text);
+  font-size: 16px;
+  line-height: 1.45;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.board__link:hover { color: var(--accent); }
+
+.board__meta {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.board__owner {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.board__comments { color: var(--accent); }
+
+/* --- 쪽 넘기기 ------------------------------------------------------------ */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.pager__at {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 입력칸 -------------------------------------------------------------- */
+
+.view__title {
+  margin: 0 0 1.25rem;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.view__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.field {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.field--tight { margin-bottom: 0.6rem; }
+
+.field__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.field__input,
+.field__area {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.field__area {
+  font-family: var(--text);
+  font-size: 16px;
+  resize: vertical;
+}
+
+.field__input:focus,
+.field__area:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.field__hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.field__msg {
+  margin: 0.75rem 0 0;
+  min-height: 1.4em;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.field__msg--error { color: var(--danger); }
+
+/* 봇이 채우는 칸. 사람에게는 어떤 방법으로도 보이지 않아야 합니다.
+   display:none 은 일부 봇이 알아채므로 화면 밖으로 밀어냅니다. */
+.trap {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.turnstile { margin: 0.5rem 0 0; }
+
+/* --- 글 읽기 ------------------------------------------------------------- */
+
+.post {
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.post__title {
+  margin: 0;
+  font-family: var(--text);
+  font-size: 22px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.post__meta {
+  margin: 0.5rem 0 1.25rem;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.post__dot { margin: 0 0.15rem; }
+
+.post__edited { margin-left: 0.35rem; }
+
+.post__body {
+  font-family: var(--text);
+  font-size: 16px;
+  line-height: 1.8;
+  /* 사람이 쓴 줄바꿈을 그대로 살리고, 긴 낱말이 화면을 밀지 않게 합니다 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* --- 댓글 ---------------------------------------------------------------- */
+
+.comments { margin-top: 2rem; }
+
+.comments__heading {
+  margin: 0 0 0.75rem;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.comments__list {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.comment {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.comment__meta {
+  margin: 0 0 0.3rem;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.comment__del { font-size: 12px; }
+
+.comment__body {
+  font-family: var(--text);
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comments__form {
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.comments__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+/* --- 비밀번호 묻는 창 ------------------------------------------------------ */
+
+.gate__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}

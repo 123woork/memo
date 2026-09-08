@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>게시판</title>
+<meta name="description" content="게시판">
+<meta name="theme-color" content="#F1F4F0">
+<!-- 아직 실험 단계라 검색엔진에는 올리지 않습니다. 봇을 줄이는 효과도 있습니다. -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="board.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1 class="topbar__title">게시판</h1>
+  <div class="topbar__meta">
+    <p class="topbar__count" id="count" aria-live="polite"></p>
+    <a class="linkbtn" href="/">메모로</a>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ================================================= 목록 화면 -->
+  <section class="view" id="view-list">
+
+    <div class="board__bar">
+      <p class="board__lead">누구나 읽고 쓸 수 있습니다.</p>
+      <button type="button" class="btn btn--primary" id="go-write">글쓰기</button>
+    </div>
+
+    <ul class="board" id="post-list"></ul>
+    <p class="notice" id="list-empty" hidden>아직 글이 없습니다. 첫 글을 남겨 보세요.</p>
+
+    <nav class="pager" id="pager" aria-label="쪽 넘기기" hidden>
+      <button type="button" class="btn btn--quiet" id="prev">이전</button>
+      <span class="pager__at" id="pager-at"></span>
+      <button type="button" class="btn btn--quiet" id="next">다음</button>
+    </nav>
+
+  </section>
+
+  <!-- ================================================= 글쓰기 / 수정 화면 -->
+  <section class="view" id="view-write" hidden>
+
+    <h2 class="view__title" id="write-title">글쓰기</h2>
+
+    <label class="field">
+      <span class="field__label">제목</span>
+      <input type="text" id="w-title" class="field__input" maxlength="120" autocomplete="off">
+    </label>
+
+    <label class="field" id="w-nickname-field">
+      <span class="field__label">닉네임</span>
+      <input type="text" id="w-nickname" class="field__input" maxlength="20"
+             placeholder="비우면 익명" autocomplete="nickname">
+    </label>
+
+    <label class="field" id="w-password-field">
+      <span class="field__label">비밀번호</span>
+      <input type="password" id="w-password" class="field__input" maxlength="32"
+             autocomplete="new-password">
+      <span class="field__hint">
+        나중에 이 글을 고치거나 지울 때 씁니다.
+        <strong>이 사이트 비밀번호는 쓰지 마세요.</strong>
+      </span>
+    </label>
+
+    <label class="field">
+      <span class="field__label">내용</span>
+      <textarea id="w-body" class="field__area" rows="12"></textarea>
+    </label>
+
+    <!-- 봇이 채우는 칸입니다. 사람에게는 보이지 않습니다. -->
+    <div class="trap" aria-hidden="true">
+      <label for="w-website">이 칸은 비워 두세요</label>
+      <input type="text" id="w-website" tabindex="-1" autocomplete="off">
+    </div>
+
+    <div id="w-turnstile" class="turnstile"></div>
+
+    <p class="field__msg" id="write-msg" aria-live="polite"></p>
+
+    <div class="view__actions">
+      <button type="button" class="btn btn--quiet" id="write-cancel">취소</button>
+      <button type="button" class="btn btn--primary" id="write-save">올리기</button>
+    </div>
+
+  </section>
+
+  <!-- ================================================= 글 읽기 화면 -->
+  <section class="view" id="view-read" hidden>
+
+    <article class="post">
+      <h2 class="post__title" id="r-title"></h2>
+      <p class="post__meta">
+        <span id="r-nickname"></span>
+        <span class="post__dot">·</span>
+        <span id="r-date"></span>
+        <span class="post__edited" id="r-edited" hidden>(수정됨)</span>
+      </p>
+      <div class="post__body" id="r-body"></div>
+    </article>
+
+    <div class="view__actions" id="r-actions">
+      <button type="button" class="btn btn--quiet" id="r-back">목록</button>
+      <button type="button" class="btn btn--quiet" id="r-edit" hidden>수정</button>
+      <button type="button" class="btn btn--quiet" id="r-delete" hidden>삭제</button>
+    </div>
+
+    <section class="comments" aria-labelledby="c-heading">
+      <h3 class="comments__heading" id="c-heading">댓글 <span id="c-count">0</span></h3>
+
+      <ul class="comments__list" id="comment-list"></ul>
+
+      <div class="comments__form">
+        <label class="field field--tight" id="c-nickname-field">
+          <span class="field__label">닉네임</span>
+          <input type="text" id="c-nickname" class="field__input" maxlength="20"
+                 placeholder="비우면 익명" autocomplete="nickname">
+        </label>
+
+        <label class="field field--tight" id="c-password-field">
+          <span class="field__label">비밀번호</span>
+          <input type="password" id="c-password" class="field__input" maxlength="32"
+                 autocomplete="new-password">
+        </label>
+
+        <textarea id="c-body" class="field__area" rows="3"
+                  placeholder="댓글을 남겨 보세요." aria-label="댓글 내용"></textarea>
+
+        <div class="trap" aria-hidden="true">
+          <label for="c-website">이 칸은 비워 두세요</label>
+          <input type="text" id="c-website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div id="c-turnstile" class="turnstile"></div>
+
+        <p class="field__msg" id="comment-msg" aria-live="polite"></p>
+
+        <div class="comments__actions">
+          <button type="button" class="btn btn--primary" id="comment-save">댓글 달기</button>
+        </div>
+      </div>
+    </section>
+
+  </section>
+
+  <p class="notice" id="notice" hidden></p>
+
+</main>
+
+<!-- 비밀번호를 물어보는 작은 창. 글/댓글을 지우거나 고칠 때 뜹니다. -->
+<div class="gate" id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="ask-title">
+  <div class="gate__box">
+    <h2 class="gate__title" id="ask-title">비밀번호</h2>
+    <p class="gate__msg" id="ask-msg">글을 쓸 때 정한 비밀번호를 넣으세요.</p>
+    <input type="password" id="ask-input" class="gate__input" autocomplete="off" aria-label="비밀번호">
+    <div class="gate__actions">
+      <button type="button" class="btn btn--quiet" id="ask-cancel">취소</button>
+      <button type="button" class="btn btn--primary" id="ask-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<script src="board-store.js"></script>
+<script src="board.js"></script>
+</body>
+</html>
