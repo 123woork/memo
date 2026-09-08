@@ -6,6 +6,7 @@
 <title>메모</title>
 <meta name="description" content="개인 메모장">
 <meta name="theme-color" content="#F1F4F0">
+<meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15,7 +16,10 @@
 
 <header class="topbar">
   <h1 class="topbar__title">메모</h1>
-  <p class="topbar__count" id="count" aria-live="polite"></p>
+  <div class="topbar__meta">
+    <p class="topbar__count" id="count" aria-live="polite"></p>
+    <button type="button" class="linkbtn" id="logout" hidden>잠그기</button>
+  </div>
 </header>
 
 <main class="page">
@@ -52,6 +56,22 @@
 
 </main>
 
+<!-- 잠금 화면. 세션이 없으면 이 위로 덮입니다. -->
+<div class="gate" id="gate" hidden role="dialog" aria-modal="true" aria-labelledby="gate-title">
+  <div class="gate__box">
+    <h2 class="gate__title" id="gate-title">잠겨 있습니다</h2>
+    <p class="gate__msg" id="gate-msg">비밀번호를 입력하세요.</p>
+    <input
+      type="password"
+      id="gate-input"
+      class="gate__input"
+      autocomplete="current-password"
+      aria-label="비밀번호">
+    <button type="button" class="btn btn--primary gate__btn" id="gate-btn">열기</button>
+  </div>
+</div>
+
+<script src="auth.js"></script>
 <script src="storage.js"></script>
 <script src="app.js"></script>
 </body>

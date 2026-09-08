@@ -70,6 +70,12 @@ body {
   letter-spacing: 0.02em;
 }
 
+.topbar__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+}
+
 .topbar__count {
   margin: 0;
   font-size: 12.5px;
@@ -125,6 +131,8 @@ body {
   color: var(--ink-soft);
 }
 
+.composer__hint--error { color: var(--danger); }
+
 .composer__actions {
   display: flex;
   align-items: center;
@@ -155,6 +163,13 @@ body {
   color: #FFFFFF;
 }
 .btn--primary:hover { background: #185849; }
+
+/* 서버 응답을 기다리는 동안 */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn--primary:disabled:hover { background: var(--accent); }
 
 .btn--quiet {
   background: transparent;
@@ -280,4 +295,73 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
+}
+
+
+/* --- 잠금 화면 -----------------------------------------------------------
+   세션이 없으면 화면 전체를 덮습니다. 뒤의 내용은 아직 비어 있지만,
+   혹시 남아 있어도 보이지 않도록 불투명하게 깔았습니다.
+   -------------------------------------------------------------------------- */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: var(--paper);
+}
+
+.gate[hidden] { display: none; }
+
+.gate__box {
+  width: 100%;
+  max-width: 20rem;
+  text-align: left;
+}
+
+.gate__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.gate__msg {
+  margin: 0.4rem 0 1.25rem;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  min-height: 2.4em;   /* 문구가 바뀌어도 입력창이 안 흔들리게 */
+}
+
+.gate__msg--error { color: var(--danger); }
+
+.gate__input {
+  display: block;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 16px;     /* iOS 자동 확대 방지 */
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.gate__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-pale);
+}
+
+.gate__input:disabled { opacity: 0.6; }
+
+.gate__btn {
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.65rem;
 }

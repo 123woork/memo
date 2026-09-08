@@ -28,6 +28,7 @@ const el = {
   stream:   document.getElementById('stream'),
   notice:   document.getElementById('notice'),
   count:    document.getElementById('count'),
+  logout:   document.getElementById('logout'),
 };
 
 /** id → { memo, el, timeEl, bodyEl, lower }
@@ -40,6 +41,31 @@ const live = new Set();
 
 let ticker = null;
 let editingId = null;
+let busy = false;          // 서버 응답을 기다리는 중인지
+
+
+/* --- 오류 알리기 ---------------------------------------------------------
+   저장이 서버로 가면서 실패할 수 있게 됐습니다. 조용히 삼키면 사용자는
+   저장된 줄 알기 때문에, 입력창 아래 안내 자리에 띄웁니다.
+   -------------------------------------------------------------------------- */
+
+let defaultHint = '';
+let hintTimer = null;
+
+function flash(message) {
+  clearTimeout(hintTimer);
+  el.hint.textContent = message;
+  el.hint.classList.add('composer__hint--error');
+  hintTimer = setTimeout(() => {
+    el.hint.classList.remove('composer__hint--error');
+    el.hint.textContent = defaultHint;
+  }, 6000);
+}
+
+function setBusy(on) {
+  busy = on;
+  el.save.disabled = on;
+}
 
 
 /* --- 시간 표시 ----------------------------------------------------------- */
@@ -213,23 +239,35 @@ document.addEventListener('visibilitychange', () => {
 /* --- 저장 / 수정 --------------------------------------------------------- */
 
 async function submit() {
+  if (busy) return;                       // 응답 오기 전 연타 방지
   const text = el.editor.value.trim();
   if (!text) { el.editor.focus(); return; }
 
-  if (editingId) {
-    const entry = rows.get(editingId);
-    const updated = await MemoStore.update(editingId, text);
-    leaveEditMode();
-    // 저장소가 돌려준 객체를 다시 들고 있습니다. 지금은 같은 객체지만,
-    // 나중에 서버 API로 바꾸면 새 객체가 오므로 이렇게 해두면 그대로 동작합니다.
-    if (entry && updated) {
-      entry.memo = updated;
-      refreshRow(entry);
+  setBusy(true);
+  try {
+    if (editingId) {
+      const entry = rows.get(editingId);
+      const updated = await MemoStore.update(editingId, text);
+      leaveEditMode();
+      // 저장소가 돌려준 객체를 다시 들고 있습니다.
+      if (entry && updated) {
+        entry.memo = updated;
+        refreshRow(entry);
+      }
+    } else {
+      const memo = await MemoStore.create(text);
+      leaveEditMode();
+      insertRow(memo);
     }
-  } else {
-    const memo = await MemoStore.create(text);
-    leaveEditMode();
-    insertRow(memo);
+  } catch (err) {
+    // 입력창 내용은 지우지 않습니다. 쓴 글이 사라지면 안 되니까요.
+    if (err.authRequired) {
+      Auth.open(() => submit());   // 다시 잠기면 풀고 나서 이어서 저장합니다
+    } else {
+      flash(err.message);
+    }
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -281,9 +319,14 @@ el.stream.addEventListener('click', async (e) => {
     }
 
     case 'confirm-delete':
-      await MemoStore.remove(entry.memo.id);
-      if (editingId === entry.memo.id) leaveEditMode();
-      dropRow(entry.memo.id);
+      try {
+        await MemoStore.remove(entry.memo.id);
+        if (editingId === entry.memo.id) leaveEditMode();
+        dropRow(entry.memo.id);   // 서버에서 지워진 걸 확인한 뒤에만 화면에서 뺍니다
+      } catch (err) {
+        normalTools(entry.toolsEl);
+        if (err.authRequired) Auth.open(() => {}); else flash(err.message);
+      }
       break;
 
     case 'cancel-delete':
@@ -311,20 +354,41 @@ el.editor.addEventListener('keydown', (e) => {
 /* --- 시작 ---------------------------------------------------------------- */
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-el.hint.textContent = MemoStore.isTemporary()
+defaultHint = MemoStore.isTemporary()
   ? '이 브라우저에서는 저장이 유지되지 않습니다. 새로고침하면 사라집니다.'
   : `${isMac ? '⌘' : 'Ctrl'} + Enter로 저장`;
+el.hint.textContent = defaultHint;
 
-(async () => {
-  const memos = await MemoStore.list();
+el.logout.addEventListener('click', () => Auth.logout());
+
+async function start() {
+  el.notice.hidden = false;
+  el.notice.textContent = '불러오는 중…';
+
+  let memos;
+  try {
+    memos = await MemoStore.list();
+  } catch (err) {
+    if (err.authRequired) { Auth.open(start); return; }   // 잠겨 있으면 풀고 다시
+    el.notice.textContent = err.message;
+    return;   // 목록을 못 받았으므로 빈 화면으로 두지 않고 이유를 남깁니다
+  }
+
+  // 다시 부를 수 있으므로 이전 내용을 비웁니다
+  el.stream.replaceChildren();
+  rows.clear();
+  live.clear();
 
   // 한 번에 붙여서 화면 재계산을 한 번만 일으킵니다.
   const frag = document.createDocumentFragment();
   for (const memo of memos) frag.appendChild(buildRow(memo).el);
   el.stream.appendChild(frag);
 
+  el.logout.hidden = false;
   updateCount();
   applyFilter();
   startTicker();
   el.editor.focus();
-})();
+}
+
+start();

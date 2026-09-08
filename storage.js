@@ -1,114 +1,74 @@
 /* ==========================================================================
    storage.js — 메모를 어디에 저장할지 담당하는 유일한 파일
    --------------------------------------------------------------------------
-   외부에 보이는 함수(list/create/update/remove/isTemporary)는 그대로입니다.
-   나중에 Cloudflare Workers + D1로 옮길 때 이 파일만 바꾸면 됩니다.
+   서버(Cloudflare D1) 저장 버전입니다.
+   앞 버전은 브라우저에만 저장해서 기기끼리 안 보였습니다.
+   지금은 /api/memos 를 통해 서버에 저장하므로 어느 기기에서든 같은 메모가
+   보입니다. 누가 로그인했는지는 서버가 Cloudflare Access 토큰으로 알아냅니다.
 
-   [고친 것]
-   전에는 create/update/remove가 매번 이렇게 동작했습니다:
-       전체를 JSON.parse → 배열 수정 → 전체를 JSON.stringify → 저장
-   메모가 500개면 한 건 고치는 데 500개를 전부 문자열로 만들었다 되돌렸습니다.
-
-   지금은 시작할 때 딱 한 번만 파싱하고, 그 배열이 곧 원본입니다.
-   읽기에는 파싱이 아예 없고, 쓰기는 아래처럼 묶어서 처리합니다.
+   app.js에 보이는 함수 이름(list/create/update/remove)은 그대로입니다.
    ========================================================================== */
 
 const MemoStore = (() => {
-  const KEY = 'memo.v1';
-  const WRITE_DELAY = 200;   // ms
+  const API = '/api/memos';
 
-  let cache = [];            // 최신순 정렬을 유지합니다. 이 배열이 원본입니다.
-  let persistent = true;     // localStorage를 실제로 쓸 수 있는지
-  let writeTimer = null;
-  let dirty = false;
-
-  /* --- 시작할 때 한 번만 ------------------------------------------------ */
-
-  (function init() {
+  async function call(url, options = {}) {
+    let res;
     try {
-      const probe = '__probe__';
-      window.localStorage.setItem(probe, '1');
-      window.localStorage.removeItem(probe);
-      cache = JSON.parse(window.localStorage.getItem(KEY)) || [];
+      res = await fetch(url, {
+        credentials: 'same-origin',   // Access 로그인 쿠키를 같이 보냅니다
+        ...options
+      });
     } catch {
-      // 사파리 비공개 모드, 용량 초과, 미리보기 화면 등
-      persistent = false;
-      cache = [];
+      throw new Error('서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요.');
     }
-    cache.sort((a, b) => b.createdAt - a.createdAt);
-  })();
 
-  /* --- 쓰기 -------------------------------------------------------------
-     연달아 고쳐도 실제 저장은 200ms에 한 번만 일어납니다.
-
-     타이머가 이미 걸려 있으면 새로 걸지 않는 방식(스로틀)을 썼습니다.
-     매번 타이머를 미루는 방식(디바운스)이면 계속 입력하는 동안 저장이
-     무한정 밀릴 수 있어서, 첫 변경 후 200ms 안에는 반드시 한 번
-     저장되도록 했습니다.
-     ---------------------------------------------------------------------- */
-
-  function flush() {
-    if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
-    if (!dirty) return;
-    dirty = false;
-    if (!persistent) return;
-    try {
-      window.localStorage.setItem(KEY, JSON.stringify(cache));
-    } catch {
-      persistent = false;   // 용량이 찼습니다. 이후로는 메모리에만 남습니다.
+    if (res.status === 401) {
+      const err = new Error('로그인이 필요합니다.');
+      err.authRequired = true;   // app.js가 이걸 보고 잠금 화면을 띄웁니다
+      throw err;
     }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || `저장하지 못했습니다 (오류 ${res.status})`);
+    }
+
+    if (res.status === 204) return null;
+    return res.json();
   }
 
-  function scheduleWrite() {
-    dirty = true;
-    if (!writeTimer) writeTimer = setTimeout(flush, WRITE_DELAY);
+  function send(url, method, text) {
+    return call(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
   }
 
-  // 저장이 밀린 상태로 탭이 닫히거나 가려지면 잃어버리므로, 그때는 즉시 씁니다.
-  window.addEventListener('pagehide', flush);
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) flush();
-  });
-
-  function newId() {
-    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
-  }
+  const one = id => `${API}/${encodeURIComponent(id)}`;
 
   return {
-    /** 최신순 목록. 이미 정렬돼 있어 정렬 비용이 없습니다.
-     *  내부 원본 배열이므로 읽기 전용으로만 쓰세요. */
+    /** 최신순 목록. 서버가 이미 정렬해서 보내줍니다. */
     async list() {
-      return cache;
+      return call(API);
     },
 
     async create(text) {
-      const now = Date.now();
-      const memo = { id: newId(), text, createdAt: now, updatedAt: now };
-      cache.unshift(memo);   // 새 메모가 항상 제일 최신 → 맨 앞에 넣으면 정렬이 유지됩니다
-      scheduleWrite();
-      return memo;
+      return send(API, 'POST', text);
     },
 
     async update(id, text) {
-      const memo = cache.find(m => m.id === id);
-      if (!memo) return null;
-      memo.text = text;
-      memo.updatedAt = Date.now();
-      scheduleWrite();       // 순서는 createdAt 기준이라 자리는 그대로입니다
-      return memo;
+      return send(one(id), 'PUT', text);
     },
 
     async remove(id) {
-      const i = cache.findIndex(m => m.id === id);
-      if (i !== -1) {
-        cache.splice(i, 1);
-        scheduleWrite();
-      }
+      await call(one(id), { method: 'DELETE' });
     },
 
-    /** 저장이 유지되지 않는 환경인지 (화면 안내용) */
+    /** 서버에 저장하므로 항상 false입니다. */
     isTemporary() {
-      return !persistent;
+      return false;
     }
   };
 })();
