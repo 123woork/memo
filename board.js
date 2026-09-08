@@ -54,6 +54,12 @@
     rEdit:      $('r-edit'),
     rDelete:    $('r-delete'),
 
+    filesSec:   $('files-section'),
+    fileList:   $('file-list'),
+    fileAdd:    $('file-add'),
+    fileInput:  $('file-input'),
+    fileMsg:    $('file-msg'),
+
     cCount:     $('c-count'),
     cList:      $('comment-list'),
     cNickname:  $('c-nickname'),
@@ -77,6 +83,10 @@
   let current  = null;    // 지금 읽고 있는 글
   let editingId = null;   // 수정 중이면 그 글의 id
   let busy     = false;
+
+  /* 서버(lib/board.js LIMITS.fileBytes)와 같은 값이어야 합니다.
+     서버가 최종 판정을 하고, 여기서는 큰 파일을 헛되이 올리지 않게 미리 걸러 냅니다. */
+  const MAX_FILE_BYTES = 500000;
 
   /* ------------------------------------------------------------ 시간 표시 */
 
@@ -285,7 +295,135 @@
     return li;
   }
 
-  function paintPost(post, comments) {
+  /* ----------------------------------------------------------- HTML 첨부 */
+
+  function sizeText(bytes) {
+    return bytes < 1000 ? bytes + 'B' : Math.round(bytes / 1000) + 'KB';
+  }
+
+  function makeFileRow(file) {
+    const li = document.createElement('li');
+    li.className = 'file';
+
+    const bar = document.createElement('p');
+    bar.className = 'file__bar';
+
+    const name = document.createElement('span');
+    name.className = 'file__name';
+    name.textContent = file.name;          // 사람이 올린 값 — textContent
+    bar.appendChild(name);
+
+    const size = document.createElement('span');
+    size.className = 'file__size';
+    size.textContent = ' ' + sizeText(file.size);
+    bar.appendChild(size);
+
+    // 보기 — 격리된 틀을 이 줄 아래에 폈다 접었다 합니다
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'linkbtn file__act';
+    toggle.textContent = '보기';
+    bar.appendChild(toggle);
+
+    // 새 창 — 주소를 직접 열어도 서버가 같은 격리 헤더를 붙여 내려줍니다
+    const open = document.createElement('a');
+    open.className = 'linkbtn file__act';
+    open.textContent = '새 창';
+    open.href = BoardStore.fileViewUrl(file.id);
+    open.target = '_blank';
+    open.rel = 'noopener noreferrer';
+    bar.appendChild(open);
+
+    if (cfg.owner) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'linkbtn file__act';
+      del.textContent = '삭제';
+      del.addEventListener('click', () => removeFile(file, li));
+      bar.appendChild(del);
+    }
+
+    li.appendChild(bar);
+
+    let frame = null;
+    toggle.addEventListener('click', () => {
+      if (frame) {
+        frame.remove();
+        frame = null;
+        toggle.textContent = '보기';
+        return;
+      }
+      frame = document.createElement('iframe');
+      frame.className = 'file__frame';
+      frame.title = file.name;
+      frame.loading = 'lazy';
+      /* 서버가 CSP sandbox 로 이미 격리해 내려주지만, 틀에도 한 번 더 겁니다.
+         allow-same-origin 은 넣지 않습니다. 넣으면 격리가 풀립니다. */
+      frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-modals');
+      frame.src = BoardStore.fileViewUrl(file.id);
+      li.appendChild(frame);
+      toggle.textContent = '접기';
+    });
+
+    return li;
+  }
+
+  function paintFiles(files) {
+    els.fileList.replaceChildren(...files.map(makeFileRow));
+    els.fileAdd.hidden = !cfg.owner;
+    // 첨부가 없고 주인도 아니면 이 영역 자체를 감춥니다
+    els.filesSec.hidden = files.length === 0 && !cfg.owner;
+    setMsg(els.fileMsg, '');
+  }
+
+  async function uploadPicked() {
+    const picked = Array.from(els.fileInput.files || []);
+    els.fileInput.value = '';                 // 같은 파일을 다시 골라도 반응하도록
+    if (!picked.length || !current || busy) return;
+
+    busy = true;
+    let done = 0;
+
+    try {
+      for (const file of picked) {
+        setMsg(els.fileMsg, '올리는 중입니다. (' + (done + 1) + '/' + picked.length + ')');
+        // 서버에서도 다시 재지만, 큰 파일을 통째로 보내기 전에 여기서 걸러 줍니다
+        if (file.size > MAX_FILE_BYTES) {
+          throw new Error('"' + file.name + '" 이(가) 너무 큽니다. 500KB까지 올릴 수 있습니다.');
+        }
+        const html = await file.text();
+        const created = await BoardStore.uploadFile(current.id, file.name, html);
+        els.fileList.appendChild(makeFileRow(created));
+        els.filesSec.hidden = false;
+        done++;
+      }
+      setMsg(els.fileMsg, done + '개 올렸습니다.');
+    } catch (err) {
+      setMsg(els.fileMsg, err.message, true);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function removeFile(file, row) {
+    if (busy) return;
+    if (!window.confirm('"' + file.name + '" 을(를) 지울까요?')) return;
+
+    busy = true;
+    try {
+      await BoardStore.deleteFile(file.id);
+      row.remove();                            // 그 줄만 지웁니다
+      setMsg(els.fileMsg, '');
+    } catch (err) {
+      setMsg(els.fileMsg, err.message, true);
+    } finally {
+      busy = false;
+    }
+  }
+
+  /* ------------------------------------------------------------ 읽기 화면 */
+
+  function paintPost(post, comments, files) {
     current = post;
 
     els.rTitle.textContent    = post.title;      // 사람이 쓴 값
@@ -299,6 +437,8 @@
     els.rEdit.hidden   = !mayTouch;
     els.rDelete.hidden = !mayTouch;
 
+    paintFiles(files);
+
     els.cCount.textContent = String(comments.length);
     els.cList.replaceChildren(...comments.map(makeComment));
 
@@ -311,7 +451,7 @@
     setNotice('');
     try {
       const data = await BoardStore.readPost(id);
-      paintPost(data.post, data.comments);
+      paintPost(data.post, data.comments, data.files || []);
       show('read');
     } catch (err) {
       setNotice(err.message);
@@ -511,6 +651,7 @@
   els.rDelete.addEventListener('click', removePost);
 
   els.commentSave.addEventListener('click', addComment);
+  els.fileInput.addEventListener('change', uploadPicked);
 
   els.prev.addEventListener('click', () => { if (page > 1) loadList(page - 1); });
   els.next.addEventListener('click', () => loadList(page + 1));

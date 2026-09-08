@@ -2,11 +2,16 @@
 #
 # challenges.cloudflare.com 은 게시판의 "사람 확인"(Turnstile)입니다.
 # Cloudflare 자기 도메인이고, 여기서 허용하지 않으면 위젯이 뜨지 않습니다.
+#
+# frame-src 'self' 는 게시판의 HTML 첨부를 틀 안에 넣기 위한 것입니다.
+# 그 틀에 들어가는 응답은 Functions 가 자기 CSP(sandbox)로 격리해서 내려주므로
+# tisave.com 의 쿠키나 API 에는 닿지 못합니다.
+#   functions/api/board/files/[id]/raw.js 참고
 # CSP 헤더를 두 벌 내려보내면 브라우저가 둘의 교집합만 적용해서 위젯이 막히므로,
 # 경로별로 나누지 않고 한 줄로 유지합니다.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer

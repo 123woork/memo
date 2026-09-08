@@ -13,7 +13,7 @@
 
 import { json } from '../../../../lib/auth.js';
 import {
-  LIMITS, cleanText, passwordMatches, publicPost, publicComment
+  LIMITS, cleanText, passwordMatches, publicPost, publicComment, publicFile
 } from '../../../../lib/board.js';
 
 /** 이 요청이 글을 고칠 자격이 있는지.
@@ -46,9 +46,20 @@ export async function onRequestGet({ params, env }) {
     .bind(params.id, LIMITS.maxComments)
     .all();
 
+  // 첨부 목록. html 본문은 여기서 내보내지 않습니다.
+  // 내용은 /api/board/files/:id/raw 로만 나가고, 그 응답은 격리된 출처입니다.
+  const files = await env.DB
+    .prepare(
+      'SELECT id, postId, name, size, createdAt' +
+      '  FROM files WHERE postId = ? ORDER BY createdAt ASC'
+    )
+    .bind(params.id)
+    .all();
+
   return json({
     post: publicPost(post, { withBody: true }),
-    comments: (results || []).map(publicComment)
+    comments: (results || []).map(publicComment),
+    files: (files.results || []).map(publicFile)
   });
 }
 
@@ -93,9 +104,11 @@ export async function onRequestDelete({ params, request, env, data }) {
     return json({ error: '비밀번호가 맞지 않습니다.' }, 403);
   }
 
-  // 댓글을 먼저 지우고 글을 지웁니다. 한 묶음으로 처리해 반쪽만 지워지는 일을 막습니다.
+  // 댓글과 첨부를 먼저 지우고 글을 지웁니다.
+  // 한 묶음으로 처리해 반쪽만 지워지는 일을 막습니다.
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comments WHERE postId = ?').bind(params.id),
+    env.DB.prepare('DELETE FROM files WHERE postId = ?').bind(params.id),
     env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(params.id)
   ]);
 

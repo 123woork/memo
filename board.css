@@ -206,6 +206,77 @@
   overflow-wrap: anywhere;
 }
 
+/* --- HTML 첨부 ------------------------------------------------------------ */
+
+.files { margin-top: 1.75rem; }
+
+.files__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.file__bar {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.file__name {
+  font-family: var(--text);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.file__size {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.file__act {
+  font-size: 12px;
+  text-decoration: none;
+}
+
+/* 격리된 틀. 안의 페이지는 고유 출처라 우리 쿠키나 API에 닿지 못합니다. */
+.file__frame {
+  display: block;
+  width: 100%;
+  height: 26rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  resize: vertical;
+  overflow: auto;
+}
+
+.files__add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+/* label 을 버튼처럼 씁니다. 진짜 file 입력은 sr-only 로 숨겨 둡니다. */
+.files__pick { cursor: pointer; }
+
+.files__hint {
+  flex: 1 1 14rem;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* --- 댓글 ---------------------------------------------------------------- */
 
 .comments { margin-top: 2rem; }

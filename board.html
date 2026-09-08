@@ -119,6 +119,25 @@
       <button type="button" class="btn btn--quiet" id="r-delete" hidden>삭제</button>
     </div>
 
+    <!-- HTML 첨부. 올리는 건 주인만, 보는 건 누구나. -->
+    <section class="files" id="files-section" aria-labelledby="f-heading" hidden>
+      <h3 class="comments__heading" id="f-heading">첨부된 HTML</h3>
+
+      <ul class="files__list" id="file-list"></ul>
+
+      <div class="files__add" id="file-add" hidden>
+        <label class="btn btn--quiet files__pick" for="file-input">HTML 올리기</label>
+        <input type="file" id="file-input" class="sr-only"
+               accept=".html,.htm,text/html" multiple>
+        <span class="files__hint">
+          주인만 올릴 수 있습니다. 한 파일 500KB, 글마다 10개까지.
+          올린 페이지는 격리된 틀에서 열려 메모나 로그인 정보에 닿지 못합니다.
+        </span>
+      </div>
+
+      <p class="field__msg" id="file-msg" aria-live="polite"></p>
+    </section>
+
     <section class="comments" aria-labelledby="c-heading">
       <h3 class="comments__heading" id="c-heading">댓글 <span id="c-count">0</span></h3>
 

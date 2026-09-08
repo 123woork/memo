@@ -56,3 +56,17 @@ CREATE TABLE IF NOT EXISTS board_limits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_board_limits_blocked ON board_limits (blockedUntil);
+
+-- 글에 붙는 HTML 첨부. 주인만 올릴 수 있고, 보는 건 누구나 가능합니다.
+-- 내용은 격리된 출처(opaque origin)로만 내려갑니다.
+--   functions/api/board/files/[id]/raw.js 의 CSP sandbox 참고
+CREATE TABLE IF NOT EXISTS files (
+  id        TEXT    PRIMARY KEY,
+  postId    TEXT    NOT NULL,
+  name      TEXT    NOT NULL,
+  html      TEXT    NOT NULL,
+  size      INTEGER NOT NULL,
+  createdAt INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_post ON files (postId, createdAt);

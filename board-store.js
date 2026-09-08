@@ -69,6 +69,21 @@ const BoardStore = (() => {
       return sendJson(postUrl(id), 'DELETE', { password });
     },
 
+    /** HTML 첨부 올리기 (주인만). 파일 내용을 글자 그대로 실어 보냅니다. */
+    uploadFile(postId, name, html) {
+      return sendJson(postUrl(postId) + '/files', 'POST', { name, html });
+    },
+
+    deleteFile(fileId) {
+      return call(API + '/files/' + encodeURIComponent(fileId), { method: 'DELETE' });
+    },
+
+    /** 첨부 내용을 보여 줄 주소.
+     *  이 응답은 격리된 출처로 내려오므로 iframe 에 그대로 넣어도 안전합니다. */
+    fileViewUrl(fileId) {
+      return API + '/files/' + encodeURIComponent(fileId) + '/raw';
+    },
+
     createComment(postId, payload) {
       return sendJson(postUrl(postId) + '/comments', 'POST', payload);
     },
