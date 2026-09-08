@@ -39,6 +39,7 @@
     wWebsite:   $('w-website'),
     wNickField: $('w-nickname-field'),
     wPassField: $('w-password-field'),
+    wOwnerNote: $('w-owner-note'),
     wTurnstile: $('w-turnstile'),
     writeMsg:   $('write-msg'),
     writeSave:  $('write-save'),
@@ -59,8 +60,7 @@
     cPassword:  $('c-password'),
     cBody:      $('c-body'),
     cWebsite:   $('c-website'),
-    cNickField: $('c-nickname-field'),
-    cPassField: $('c-password-field'),
+    cOwnerNote: $('c-owner-note'),
     cTurnstile: $('c-turnstile'),
     commentMsg: $('comment-msg'),
     commentSave:$('comment-save'),
@@ -331,10 +331,12 @@
     els.wPassword.value = '';
     els.wWebsite.value  = '';
 
-    // 주인은 닉네임도 비밀번호도 필요 없습니다.
-    // 수정할 때는 닉네임을 바꾸지 않으므로 감춥니다.
-    els.wNickField.hidden = cfg.owner || !!post;
-    els.wPassField.hidden = cfg.owner || !!post;
+    /* 닉네임과 비밀번호는 새 글에만 받습니다. 수정할 때는 바꾸지 않습니다.
+       주인이라고 감추지 않습니다. 주인도 원하면 비밀번호를 걸 수 있고,
+       비우면 '주인' 이름으로 올라갑니다. 위의 안내문이 그걸 설명합니다. */
+    els.wNickField.hidden = !!post;
+    els.wPassField.hidden = !!post;
+    els.wOwnerNote.hidden = !cfg.owner || !!post;
 
     // 사람 확인은 "새 글"에만 붙입니다.
     // 수정은 비밀번호(또는 주인 세션)로 이미 자격을 확인하므로 필요 없습니다.
@@ -523,9 +525,8 @@
       setNotice('설정을 불러오지 못했습니다. 새로고침해 보세요.');
     }
 
-    // 주인으로 로그인한 상태면 닉네임/비밀번호 칸을 감춥니다
-    els.cNickField.hidden = cfg.owner;
-    els.cPassField.hidden = cfg.owner;
+    // 닉네임/비밀번호 칸은 주인에게도 보여 줍니다. 비우면 '주인' 이름으로 달립니다.
+    els.cOwnerNote.hidden = !cfg.owner;
     els.cTurnstile.hidden = cfg.owner || !captcha.enabled();
 
     routeFromUrl();

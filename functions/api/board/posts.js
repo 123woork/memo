@@ -58,10 +58,17 @@ export async function onRequestPost({ request, env, data }) {
     if (problem) return json({ error: problem }, 403);
   }
 
+  /* 주인이라도 비밀번호를 적었으면 보통 글로 올립니다.
+     주인 이름표를 강제하지 않으려는 것이고, 권한이 줄지도 않습니다.
+     주인은 자기 세션으로 어떤 글이든 지울 수 있기 때문입니다.
+     비워 두면 '주인' 이름으로, 비밀번호 없이 올라갑니다. */
+  const wantsPassword = typeof body?.password === 'string' && body.password !== '';
+  const asOwner = owner && !wantsPassword;
+
   // 3) 내용 검사
   const title    = cleanText(body?.title).slice(0, LIMITS.title);
   const text     = cleanText(body?.body, { multiline: true });
-  const nickname = owner ? '주인' : cleanNickname(body?.nickname);
+  const nickname = asOwner ? '주인' : cleanNickname(body?.nickname);
 
   if (!title) return json({ error: '제목을 적어 주세요.' }, 400);
   if (!text)  return json({ error: '내용을 적어 주세요.' }, 400);
@@ -69,10 +76,10 @@ export async function onRequestPost({ request, env, data }) {
     return json({ error: '내용은 ' + LIMITS.body + '자까지 쓸 수 있습니다.' }, 400);
   }
 
-  // 4) 익명 글은 지울 때 쓸 비밀번호가 있어야 합니다
+  // 4) 주인 이름으로 올리는 게 아니면 지울 때 쓸 비밀번호가 있어야 합니다
   let pwSalt = null;
   let pwHash = null;
-  if (!owner) {
+  if (!asOwner) {
     const problem = passwordProblem(body?.password);
     if (problem) return json({ error: problem }, 400);
     const made = await makePassword(body.password);
@@ -91,7 +98,7 @@ export async function onRequestPost({ request, env, data }) {
   const post = {
     id: newId(), title, body: text, nickname,
     pwSalt, pwHash,
-    isOwner: owner ? 1 : 0,
+    isOwner: asOwner ? 1 : 0,
     ipHash, commentCount: 0,
     createdAt: now, updatedAt: now
   };

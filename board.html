@@ -50,6 +50,12 @@
 
     <h2 class="view__title" id="write-title">글쓰기</h2>
 
+    <p class="ownernote" id="w-owner-note" hidden>
+      주인으로 로그인한 상태입니다. 닉네임과 비밀번호를 <strong>비우면</strong>
+      &lsquo;주인&rsquo; 이름으로 올라가고, 비밀번호 없이 언제든 지울 수 있습니다.
+      채우면 보통 글로 올라갑니다.
+    </p>
+
     <label class="field">
       <span class="field__label">제목</span>
       <input type="text" id="w-title" class="field__input" maxlength="120" autocomplete="off">
@@ -119,6 +125,10 @@
       <ul class="comments__list" id="comment-list"></ul>
 
       <div class="comments__form">
+        <p class="ownernote" id="c-owner-note" hidden>
+          주인으로 로그인한 상태입니다. 비우면 &lsquo;주인&rsquo; 이름으로 달립니다.
+        </p>
+
         <label class="field field--tight" id="c-nickname-field">
           <span class="field__label">닉네임</span>
           <input type="text" id="c-nickname" class="field__input" maxlength="20"

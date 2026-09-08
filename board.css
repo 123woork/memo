@@ -148,6 +148,17 @@
 
 .field__msg--error { color: var(--danger); }
 
+/* 주인으로 로그인했을 때만 뜨는 안내. 글이 어떤 이름으로 올라가는지 알려줍니다. */
+.ownernote {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius);
+  background: var(--accent-pale);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 /* 봇이 채우는 칸. 사람에게는 어떤 방법으로도 보이지 않아야 합니다.
    display:none 은 일부 봇이 알아채므로 화면 밖으로 밀어냅니다. */
 .trap {

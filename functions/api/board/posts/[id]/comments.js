@@ -35,19 +35,23 @@ export async function onRequestPost({ params, request, env, data }) {
     .first();
   if (!post) return json({ error: '글을 찾을 수 없습니다.' }, 404);
 
+  /* 글과 같은 규칙입니다. 주인이라도 비밀번호를 적었으면 보통 댓글로 답니다. */
+  const wantsPassword = typeof body?.password === 'string' && body.password !== '';
+  const asOwner = owner && !wantsPassword;
+
   // 4) 내용 검사
   const text     = cleanText(body?.body, { multiline: true });
-  const nickname = owner ? '주인' : cleanNickname(body?.nickname);
+  const nickname = asOwner ? '주인' : cleanNickname(body?.nickname);
 
   if (!text) return json({ error: '댓글 내용을 적어 주세요.' }, 400);
   if (text.length > LIMITS.comment) {
     return json({ error: '댓글은 ' + LIMITS.comment + '자까지 쓸 수 있습니다.' }, 400);
   }
 
-  // 5) 익명 댓글은 지울 때 쓸 비밀번호가 있어야 합니다
+  // 5) 주인 이름으로 다는 게 아니면 지울 때 쓸 비밀번호가 있어야 합니다
   let pwSalt = null;
   let pwHash = null;
-  if (!owner) {
+  if (!asOwner) {
     const problem = passwordProblem(body?.password);
     if (problem) return json({ error: problem }, 400);
     const made = await makePassword(body.password);
@@ -66,7 +70,7 @@ export async function onRequestPost({ params, request, env, data }) {
   const comment = {
     id: newId(), postId: params.id, body: text, nickname,
     pwSalt, pwHash,
-    isOwner: owner ? 1 : 0,
+    isOwner: asOwner ? 1 : 0,
     ipHash, createdAt: now
   };
 
