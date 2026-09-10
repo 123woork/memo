@@ -270,6 +270,23 @@
 /* label 을 버튼처럼 씁니다. 진짜 file 입력은 sr-only 로 숨겨 둡니다. */
 .files__pick { cursor: pointer; }
 
+/* 글쓰기 화면의 첨부 칸. 위쪽 여백은 .field__label 이 이미 줍니다. */
+.files__add--write { margin-top: 0; }
+
+.files__clear { font-size: 12px; }
+
+/* 글쓰기에서 고른 파일 이름. 올리기 전이라 아직 서버에는 없습니다. */
+.files__picked {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.files__picked:empty { display: none; }
+
 .files__hint {
   flex: 1 1 14rem;
   color: var(--ink-soft);

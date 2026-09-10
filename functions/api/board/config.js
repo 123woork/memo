@@ -24,7 +24,10 @@ export async function onRequestGet({ env, data }) {
       comment:  LIMITS.comment,
       pwMin:    LIMITS.pwMin,
       pwMax:    LIMITS.pwMax,
-      pageSize: LIMITS.pageSize
+      pageSize: LIMITS.pageSize,
+      // HTML 첨부. 화면이 큰 파일을 미리 걸러 낼 때 이 숫자를 씁니다.
+      fileBytes:    LIMITS.fileBytes,
+      filesPerPost: LIMITS.filesPerPost
     }
   });
 }

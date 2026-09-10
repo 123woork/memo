@@ -41,6 +41,10 @@
     wPassField: $('w-password-field'),
     wOwnerNote: $('w-owner-note'),
     wTurnstile: $('w-turnstile'),
+    wFilesField:$('w-files-field'),
+    wFileInput: $('w-file-input'),
+    wFileClear: $('w-file-clear'),
+    wFileNames: $('w-file-names'),
     writeMsg:   $('write-msg'),
     writeSave:  $('write-save'),
     writeCancel:$('write-cancel'),
@@ -83,10 +87,13 @@
   let current  = null;    // 지금 읽고 있는 글
   let editingId = null;   // 수정 중이면 그 글의 id
   let busy     = false;
+  let pending  = [];      // 글쓰기 화면에서 고른 HTML 파일 (아직 안 올림)
 
-  /* 서버(lib/board.js LIMITS.fileBytes)와 같은 값이어야 합니다.
-     서버가 최종 판정을 하고, 여기서는 큰 파일을 헛되이 올리지 않게 미리 걸러 냅니다. */
-  const MAX_FILE_BYTES = 500000;
+  /* 첨부 상한은 서버(/api/board/config)가 알려 줍니다. 서버가 최종 판정을 하고,
+     여기서는 큰 파일을 헛되이 올리지 않게 미리 걸러 냅니다.
+     설정을 못 받았을 때만 아래 기본값을 씁니다. */
+  const fileMax   = () => cfg.limits.fileBytes    || 500000;
+  const fileCount = () => cfg.limits.filesPerPost || 10;
 
   /* ------------------------------------------------------------ 시간 표시 */
 
@@ -376,33 +383,78 @@
     setMsg(els.fileMsg, '');
   }
 
+  /** 올리기 전에 크기를 봅니다. 문제가 없으면 null. */
+  function fileProblem(files) {
+    // 서버에서도 다시 재지만, 큰 파일을 통째로 보내기 전에 여기서 걸러 줍니다
+    const big = files.find(f => f.size > fileMax());
+    if (big) return '"' + big.name + '" 이(가) 너무 큽니다. ' + sizeText(fileMax()) + '까지 올릴 수 있습니다.';
+    return null;
+  }
+
+  /** 파일을 하나씩 올립니다. 올라간 것마다 onDone(서버가 준 첨부 정보)을 부릅니다.
+   *  중간에 실패하면 그 자리에서 멈추고 오류를 던집니다(앞서 올린 건 남습니다). */
+  async function uploadAll(postId, files, onDone) {
+    for (let i = 0; i < files.length; i++) {
+      setMsg(els.fileMsg, '올리는 중입니다. (' + (i + 1) + '/' + files.length + ')');
+      const html = await files[i].text();
+      onDone(await BoardStore.uploadFile(postId, files[i].name, html));
+    }
+  }
+
+  function addFileRow(created) {
+    els.fileList.appendChild(makeFileRow(created));
+    els.filesSec.hidden = false;
+  }
+
   async function uploadPicked() {
     const picked = Array.from(els.fileInput.files || []);
     els.fileInput.value = '';                 // 같은 파일을 다시 골라도 반응하도록
     if (!picked.length || !current || busy) return;
 
-    busy = true;
-    let done = 0;
+    const problem = fileProblem(picked);
+    if (problem) { setMsg(els.fileMsg, problem, true); return; }
 
+    busy = true;
     try {
-      for (const file of picked) {
-        setMsg(els.fileMsg, '올리는 중입니다. (' + (done + 1) + '/' + picked.length + ')');
-        // 서버에서도 다시 재지만, 큰 파일을 통째로 보내기 전에 여기서 걸러 줍니다
-        if (file.size > MAX_FILE_BYTES) {
-          throw new Error('"' + file.name + '" 이(가) 너무 큽니다. 500KB까지 올릴 수 있습니다.');
-        }
-        const html = await file.text();
-        const created = await BoardStore.uploadFile(current.id, file.name, html);
-        els.fileList.appendChild(makeFileRow(created));
-        els.filesSec.hidden = false;
-        done++;
-      }
-      setMsg(els.fileMsg, done + '개 올렸습니다.');
+      await uploadAll(current.id, picked, addFileRow);
+      setMsg(els.fileMsg, picked.length + '개 올렸습니다.');
     } catch (err) {
       setMsg(els.fileMsg, err.message, true);
     } finally {
       busy = false;
     }
+  }
+
+  /* --- 글쓰기 화면에서 고른 파일. 글이 올라간 뒤에 이어서 올립니다. --- */
+
+  function paintPending() {
+    els.wFileNames.replaceChildren(...pending.map(file => {
+      const li = document.createElement('li');
+      li.textContent = file.name + ' · ' + sizeText(file.size);   // 파일 이름 — textContent
+      return li;
+    }));
+    els.wFileClear.hidden = pending.length === 0;
+  }
+
+  function pickPending() {
+    const picked = Array.from(els.wFileInput.files || []);
+    els.wFileInput.value = '';                // 같은 파일을 다시 골라도 반응하도록
+    if (!picked.length) return;
+
+    // 다시 고르면 앞의 선택에 더합니다. 같은 이름은 새로 고른 쪽으로 바꿉니다.
+    const names = new Set(picked.map(f => f.name));
+    pending = pending.filter(f => !names.has(f.name)).concat(picked);
+    paintPending();
+
+    const problem = fileProblem(pending) ||
+      (pending.length > fileCount() ? '글 하나에 ' + fileCount() + '개까지 붙일 수 있습니다.' : null);
+    setMsg(els.writeMsg, problem, !!problem);
+  }
+
+  function clearPending() {
+    pending = [];
+    paintPending();
+    setMsg(els.writeMsg, '');
   }
 
   async function removeFile(file, row) {
@@ -478,6 +530,11 @@
     els.wPassField.hidden = !!post;
     els.wOwnerNote.hidden = !cfg.owner || !!post;
 
+    // HTML 첨부는 주인이 새 글을 쓸 때만. 이미 있는 글은 읽기 화면에서 붙입니다.
+    els.wFilesField.hidden = !cfg.owner || !!post;
+    pending = [];
+    paintPending();
+
     // 사람 확인은 "새 글"에만 붙입니다.
     // 수정은 비밀번호(또는 주인 세션)로 이미 자격을 확인하므로 필요 없습니다.
     setMsg(els.writeMsg, '');
@@ -497,6 +554,12 @@
 
     if (!title) { setMsg(els.writeMsg, '제목을 적어 주세요.', true); return; }
     if (!body)  { setMsg(els.writeMsg, '내용을 적어 주세요.', true); return; }
+
+    // 첨부에 문제가 있으면 글도 올리지 않습니다. 글만 올라가고 첨부가 빠지는 일을 막습니다.
+    const files = editingId ? [] : pending;
+    const fileIssue = fileProblem(files) ||
+      (files.length > fileCount() ? '글 하나에 ' + fileCount() + '개까지 붙일 수 있습니다.' : null);
+    if (fileIssue) { setMsg(els.writeMsg, fileIssue, true); return; }
 
     busy = true;
     els.writeSave.disabled = true;
@@ -521,7 +584,19 @@
           turnstileToken: cfg.owner ? undefined : captcha.token(els.wTurnstile)
         });
         captcha.reset(els.wTurnstile);
-        goToPost(created.id);
+
+        // 글이 올라갔으니 여기서부터는 실패해도 글 화면으로 넘어갑니다.
+        // 못 올린 첨부는 글 화면의 "HTML 올리기"로 다시 붙이면 됩니다.
+        pending = [];
+        await goToPost(created.id);
+        if (files.length) {
+          try {
+            await uploadAll(created.id, files, addFileRow);
+            setMsg(els.fileMsg, files.length + '개 올렸습니다. "보기"를 누르면 실행됩니다.');
+          } catch (err) {
+            setMsg(els.fileMsg, '글은 올라갔지만 첨부 중 실패했습니다: ' + err.message, true);
+          }
+        }
       }
     } catch (err) {
       setMsg(els.writeMsg, err.message, true);
@@ -623,7 +698,7 @@
 
   function goToPost(id) {
     history.pushState({}, '', '/board?p=' + encodeURIComponent(id));
-    openPost(id);
+    return openPost(id);
   }
 
   function routeFromUrl() {
@@ -652,6 +727,8 @@
 
   els.commentSave.addEventListener('click', addComment);
   els.fileInput.addEventListener('change', uploadPicked);
+  els.wFileInput.addEventListener('change', pickPending);
+  els.wFileClear.addEventListener('click', clearPending);
 
   els.prev.addEventListener('click', () => { if (page > 1) loadList(page - 1); });
   els.next.addEventListener('click', () => loadList(page + 1));
@@ -669,6 +746,10 @@
     // 닉네임/비밀번호 칸은 주인에게도 보여 줍니다. 비우면 '주인' 이름으로 달립니다.
     els.cOwnerNote.hidden = !cfg.owner;
     els.cTurnstile.hidden = cfg.owner || !captcha.enabled();
+
+    // 안내문의 첨부 상한을 서버 값으로 맞춥니다
+    for (const el of document.querySelectorAll('.js-file-max'))   el.textContent = sizeText(fileMax());
+    for (const el of document.querySelectorAll('.js-file-count')) el.textContent = String(fileCount());
 
     routeFromUrl();
   })();

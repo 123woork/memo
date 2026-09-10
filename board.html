@@ -82,6 +82,22 @@
       <textarea id="w-body" class="field__area" rows="12"></textarea>
     </label>
 
+    <!-- 새 글에 HTML 을 같이 붙이기. 주인에게만 보입니다. 글이 올라간 뒤 이어서 올립니다. -->
+    <div class="field" id="w-files-field" hidden>
+      <span class="field__label">HTML 첨부</span>
+      <div class="files__add files__add--write">
+        <label class="btn btn--quiet files__pick" for="w-file-input">HTML 고르기</label>
+        <input type="file" id="w-file-input" class="sr-only"
+               accept=".html,.htm,text/html" multiple>
+        <button type="button" class="linkbtn files__clear" id="w-file-clear" hidden>선택 취소</button>
+      </div>
+      <ul class="files__picked" id="w-file-names"></ul>
+      <span class="field__hint">
+        글과 함께 올라가고, 글 안에서 바로 실행해 볼 수 있습니다.
+        한 파일 <span class="js-file-max">500KB</span>, 글마다 <span class="js-file-count">10</span>개까지.
+      </span>
+    </div>
+
     <!-- 봇이 채우는 칸입니다. 사람에게는 보이지 않습니다. -->
     <div class="trap" aria-hidden="true">
       <label for="w-website">이 칸은 비워 두세요</label>
@@ -130,7 +146,7 @@
         <input type="file" id="file-input" class="sr-only"
                accept=".html,.htm,text/html" multiple>
         <span class="files__hint">
-          주인만 올릴 수 있습니다. 한 파일 500KB, 글마다 10개까지.
+          주인만 올릴 수 있습니다. 한 파일 <span class="js-file-max">500KB</span>, 글마다 <span class="js-file-count">10</span>개까지.
           올린 페이지는 격리된 틀에서 열려 메모나 로그인 정보에 닿지 못합니다.
         </span>
       </div>
