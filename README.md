@@ -28,6 +28,16 @@
 있습니다. 글을 쓰면서 바로 붙이거나, 이미 올린 글에 나중에 붙일 수 있습니다.
 한 파일 500KB, 글마다 10개까지. 첨부는 격리된 틀에서 돌아서 메모나 로그인 정보에 닿지 못합니다.
 
+**잠긴 글 / 비공개 글** — 글마다 공개 범위를 고릅니다. 저작권물처럼 혼자 보려는 글에 씁니다.
+- **잠금** — 목록에는 "잠긴 글"로만 뜨고, 글 비밀번호를 넣어야 제목·내용·댓글·첨부가 보입니다.
+  로그인하지 않은 기기에서도 글 비밀번호만 알면 열 수 있습니다(2시간 동안).
+- **비공개** — 주인만 봅니다. 다른 사람에게는 목록에도 없고 주소로 열어도 없는 글로 나옵니다.
+
+HTML 첨부도 글과 같은 규칙으로 막힙니다. 첨부 주소만 알아서는 열리지 않습니다.
+
+**사이트 비밀번호 바꾸기** — 메모장 위쪽 **비밀번호 바꾸기**에서 바로 바꿉니다.
+원문은 이때도 서버로 가지 않고, 바꾸면 지금 기기를 뺀 모든 기기가 로그아웃됩니다.
+
 ---
 
 ## 비밀번호가 두 종류입니다
@@ -39,6 +49,8 @@
 
 **같은 비밀번호를 두 곳에 쓰지 마세요.** 용도가 다릅니다.
 
+글 비밀번호는 잠긴 글을 여는 열쇠도 됩니다. 두 비밀번호 모두 5번 틀리면 잠깐 막힙니다.
+
 계산을 브라우저에서 하는 이유는 Cloudflare Workers의 요청당 CPU 시간이 짧기
 때문입니다. 부수 효과로 **비밀번호가 네트워크를 타지 않습니다.** 서버도, 데이터베이스도,
 로그도 비밀번호를 모릅니다.
@@ -49,14 +61,18 @@
 
 ```
 index.html  style.css  app.js  auth.js  storage.js      메모장 화면
+password.js                                             사이트 비밀번호 바꾸기 창
 board.html  board.css  board.js  board-store.js         게시판 화면
 schema.sql  schema-board.sql                            D1 테이블 정의
 _headers                                                보안 헤더 (CSP 등)
 
 lib/
-  auth.js          [서버 공용] 세션, 쿠키, 해시, 상수시간 비교, 요청 읽기, id, INSERT 도우미
+  auth.js          [서버 공용] 세션, 쿠키, 해시, 상수시간 비교, 요청 읽기, id, INSERT 도우미,
+                   사이트 설정(site_settings), 비밀번호 시도 제한
+  schema.js        [서버] 새로 생긴 표·열을 서버가 스스로 맞춤
   memos.js         [서버] 메모 글 검사
-  board.js         [서버] 입력 정리, 글 비밀번호, 봇 차단, 도배 제한, 글·댓글 공통 관문
+  board.js         [서버] 입력 정리, 글 비밀번호, 봇 차단, 도배 제한, 글·댓글 공통 관문,
+                   공개 범위(잠금/비공개), 열람 토큰
 
 tools/
   hash.html        사이트 비밀번호 → 환경변수 값 생성기 (로컬에서 엽니다)
@@ -65,6 +81,7 @@ functions/api/
   _middleware.js   /api/* 앞단. 공개 경로 판정 + 세션 확인
   [[path]].js      처리 못 한 /api 주소를 JSON 404로
   login.js         GET(salt) POST(로그인) DELETE(로그아웃)
+  password.js      POST 사이트 비밀번호 바꾸기 (로그인 필요)
   memos.js         GET(목록) POST(생성)
   memos/[id].js    PUT(수정) DELETE(삭제)
   board/
@@ -73,9 +90,10 @@ functions/api/
     posts/[id].js            GET 상세+댓글+첨부 PUT 수정 DELETE 삭제
     posts/[id]/comments.js   POST 댓글
     posts/[id]/files.js      POST HTML 첨부 (주인만)
+    posts/[id]/unlock.js     POST 잠긴 글 열기 (글 비밀번호 → 열람 토큰)
     comments/[id].js         DELETE 댓글
     files/[id].js            DELETE 첨부 (주인만)
-    files/[id]/raw.js        GET 첨부 내용 (누구나)
+    files/[id]/raw.js        GET 첨부 내용 (그 글을 볼 수 있는 사람만)
 ```
 
 `auth.js` 가 두 개입니다 — `/auth.js`(브라우저)와 `/lib/auth.js`(서버).
@@ -99,6 +117,10 @@ functions/api/
   특히 `allow-same-origin` 을 넣으면 격리가 통째로 풀립니다.
 - `_headers` 의 CSP를 **경로별로 쪼개면 안 됩니다.** Pages가 두 벌을 내려보내면
   브라우저가 교집합만 적용해서 사람 확인 위젯이 막힙니다.
+- **누가 어떤 글을 볼 수 있는지는 `lib/board.js` 의 `accessOf` 한 곳에서 정합니다.**
+  글 상세, 댓글 달기, 첨부 보기가 모두 이 함수를 거칩니다. 새 경로를 만들면 여기를 쓰세요.
+- **표나 열을 새로 만들 때는 `lib/schema.js` 에 추가합니다.** 배포하면 서버가 알아서
+  붙이므로, D1 콘솔에 SQL 을 다시 넣지 않아도 됩니다.
 
 ### 손보고 싶을 만한 것들
 

@@ -50,6 +50,9 @@
     wFileInput: $('w-file-input'),
     wFileClear: $('w-file-clear'),
     wFileNames: $('w-file-names'),
+    wVisibility:$('w-visibility'),
+    wVisHint:   $('w-visibility-hint'),
+    wVisPrivate:$('w-visibility-private'),
     writeMsg:   $('write-msg'),
     writeSave:  $('write-save'),
     writeCancel:$('write-cancel'),
@@ -62,6 +65,10 @@
     rBack:      $('r-back'),
     rEdit:      $('r-edit'),
     rDelete:    $('r-delete'),
+    rVisibility:$('r-visibility'),
+    rLocked:    $('r-locked'),
+    rUnlock:    $('r-unlock'),
+    rUnlockMsg: $('r-unlock-msg'),
 
     filesSec:   $('files-section'),
     fileList:   $('file-list'),
@@ -69,6 +76,7 @@
     fileInput:  $('file-input'),
     fileMsg:    $('file-msg'),
 
+    commentsSec:$('comments-section'),
     cCount:     $('c-count'),
     cList:      $('comment-list'),
     cNickname:  $('c-nickname'),
@@ -95,6 +103,10 @@
   let editingId = null;    // 수정 중이면 그 글의 id
   let busy      = false;   // 서버 응답을 기다리는 중
   let pending   = [];      // 글쓰기 화면에서 고른 HTML 파일 (아직 안 올림)
+
+  /* 잠긴 글의 열람 토큰. 글 id → 토큰. 이 탭의 메모리에만 두고 저장하지 않습니다.
+     2시간 뒤 만료되면 서버가 다시 잠긴 글로 답하고, 그때 버립니다. */
+  const tokens = new Map();
 
   /* 첨부 상한은 서버(/api/board/config)가 알려 줍니다. 서버가 최종 판정을 하고,
      여기서는 큰 파일을 헛되이 올리지 않게 미리 걸러 냅니다.
@@ -130,6 +142,30 @@
       line.append(part);
     });
     return line;
+  }
+
+  /* --- 공개 범위 표시 --- */
+
+  const VISIBILITY_LABEL = { locked: '잠금', private: '비공개' };
+
+  const VISIBILITY_HINT = {
+    locked:  '목록에는 "잠긴 글"로만 뜹니다. 제목·내용·댓글·첨부는 위의 글 비밀번호를 ' +
+             '넣어야 보입니다. 주인은 로그인하면 바로 봅니다.',
+    private: '주인만 봅니다. 다른 사람에게는 목록에도 없고, 주소로 열어도 없는 글로 나옵니다.'
+  };
+
+  /** 공개 글이면 감추고, 잠금·비공개면 이름표를 붙입니다. */
+  function paintBadge(el, visibility) {
+    const label = VISIBILITY_LABEL[visibility];
+    el.hidden = !label;
+    el.textContent = label || '';
+    el.className = 'badge' + (visibility === 'private' ? ' badge--private' : '');
+  }
+
+  function makeBadge(visibility) {
+    const badge = make('span');
+    paintBadge(badge, visibility);
+    return badge;
   }
 
   const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR;
@@ -261,6 +297,7 @@
       e.preventDefault();
       goToPost(post.id);
     });
+    if (VISIBILITY_LABEL[post.visibility]) link.append(' ', makeBadge(post.visibility));
 
     const extras = post.commentCount > 0
       ? [make('span', 'board__comments', '댓글 ' + post.commentCount)]
@@ -292,7 +329,10 @@
 
   /* ============================================================= 글 읽기 */
 
-  function paintPost(post, comments, files) {
+  /** 서버가 준 글 상세를 그립니다.
+   *  잠긴 글을 아직 열지 않았으면 locked 가 true 이고, 제목이 가려진 채
+   *  내용·댓글·첨부 없이 옵니다. 그때는 "열기" 상자만 보여 줍니다. */
+  function paintPost({ post, comments = [], files = [], locked = false }) {
     current = post;
 
     els.rTitle.textContent    = post.title;      // 사람이 쓴 값
@@ -300,12 +340,22 @@
     els.rNickname.className   = post.isOwner ? 'board__owner' : '';
     els.rDate.textContent     = whenText(post.createdAt);
     els.rEdited.hidden        = post.updatedAt <= post.createdAt;
-    els.rBody.textContent     = post.body;       // 사람이 쓴 값. 줄바꿈은 CSS가 살립니다.
+    els.rBody.textContent     = post.body || ''; // 사람이 쓴 값. 줄바꿈은 CSS가 살립니다.
+    paintBadge(els.rVisibility, post.visibility);
 
-    const mayTouch = cfg.owner || post.hasPassword;
+    els.rLocked.hidden     = !locked;
+    els.rBody.hidden       = locked;
+    els.commentsSec.hidden = locked;
+    setMsg(els.rUnlockMsg, '');
+
+    const mayTouch = !locked && (cfg.owner || post.hasPassword);
     els.rEdit.hidden   = !mayTouch;
     els.rDelete.hidden = !mayTouch;
 
+    if (locked) {
+      els.filesSec.hidden = true;
+      return;
+    }
     paintFiles(files);
     paintComments(comments);
   }
@@ -313,12 +363,42 @@
   async function openPost(id) {
     setNotice('');
     try {
-      const data = await BoardStore.readPost(id);
-      paintPost(data.post, data.comments, data.files || []);
+      const data = await BoardStore.readPost(id, tokens.get(id));
+      if (data.locked) tokens.delete(id);          // 가지고 있던 토큰이 만료됐으면 버립니다
+      paintPost(data);
       show('read');
     } catch (err) {
       setNotice(err.message);
       show('list');
+    }
+  }
+
+  /** 잠긴 글의 "열기". 글 비밀번호로 열람 토큰을 받아 다시 불러옵니다. */
+  function unlockCurrent() {
+    return exclusive(async () => {
+      if (!current) return;
+
+      const password = await askPassword('글 비밀번호를 넣으세요.');
+      if (password === null) return;
+
+      try {
+        const { token } = await BoardStore.unlockPost(current.id, password);
+        tokens.set(current.id, token);
+      } catch (err) {
+        setMsg(els.rUnlockMsg, err.message, true);
+        return;
+      }
+      await openPost(current.id);
+    }, els.rUnlock);
+  }
+
+  /** 비밀번호로 잠긴 글을 열어 토큰을 받아 둡니다. 글을 쓰거나 고친 사람이
+   *  곧바로 내용을 보게 하려는 것이라, 실패해도 조용히 넘어갑니다(잠긴 화면이 뜹니다). */
+  async function rememberToken(id, password) {
+    try {
+      tokens.set(id, (await BoardStore.unlockPost(id, password)).token);
+    } catch {
+      // 잠긴 화면의 "열기"로 다시 열면 됩니다
     }
   }
 
@@ -384,7 +464,7 @@
           password: els.cPassword.value,
           website:  els.cWebsite.value,
           turnstileToken: captcha.token(els.cTurnstile)
-        });
+        }, tokens.get(current.id));
 
         // 목록 전체를 다시 그리지 않고 새 댓글 하나만 붙입니다
         els.cList.appendChild(makeComment(created));
@@ -426,11 +506,14 @@
   function makeFileRow(file) {
     const li = make('li', 'file');
 
+    // 잠긴 글의 첨부는 열람 토큰을 주소에 달아야 서버가 내줍니다
+    const viewUrl = BoardStore.fileViewUrl(file.id, tokens.get(file.postId));
+
     const toggle = makeButton('보기', 'linkbtn file__act', toggleFrame);
 
     // 새 창 — 주소를 직접 열어도 서버가 같은 격리 헤더를 붙여 내려줍니다
     const open = make('a', 'linkbtn file__act', '새 창');
-    open.href = BoardStore.fileViewUrl(file.id);
+    open.href = viewUrl;
     open.target = '_blank';
     open.rel = 'noopener noreferrer';
 
@@ -457,7 +540,7 @@
       frame.title = file.name;
       frame.loading = 'lazy';
       frame.setAttribute('sandbox', FRAME_SANDBOX);
-      frame.src = BoardStore.fileViewUrl(file.id);
+      frame.src = viewUrl;
       li.append(frame);
       toggle.textContent = '접기';
     }
@@ -588,6 +671,10 @@
     pending = [];
     paintPending();
 
+    // 공개 범위는 새 글과 수정 모두에서 고릅니다
+    els.wVisibility.value = isNew ? 'public' : (post.visibility || 'public');
+    paintVisibilityHint();
+
     // 사람 확인은 "새 글"에만 붙입니다.
     // 수정은 비밀번호(또는 주인 세션)로 이미 자격을 확인하므로 필요 없습니다.
     setMsg(els.writeMsg, '');
@@ -623,23 +710,38 @@
     }, els.writeSave);
   }
 
+  function paintVisibilityHint() {
+    const hint = VISIBILITY_HINT[els.wVisibility.value] || '';
+    els.wVisHint.textContent = hint;
+    els.wVisHint.hidden = !hint;
+  }
+
   async function saveEdit(title, body) {
     const password = await passwordUnlessOwner('글을 쓸 때 정한 비밀번호를 넣으세요.');
     if (password === null) { setMsg(els.writeMsg, ''); return; }
 
-    await BoardStore.updatePost(editingId, { title, body, password });
+    const visibility = els.wVisibility.value;
+    await BoardStore.updatePost(editingId, { title, body, password, visibility });
+
+    // 비밀번호로 고쳐서 잠갔다면 같은 비밀번호로 바로 열어 둡니다
+    if (visibility === 'locked' && !cfg.owner) await rememberToken(editingId, password);
     await openPost(editingId);
   }
 
   async function saveNew(title, body, files) {
+    const password   = els.wPassword.value;
+    const visibility = els.wVisibility.value;
+
     const created = await BoardStore.createPost({
-      title, body,
+      title, body, password, visibility,
       nickname: els.wNickname.value,
-      password: els.wPassword.value,
       website:  els.wWebsite.value,
       turnstileToken: captcha.token(els.wTurnstile)
     });
     captcha.reset(els.wTurnstile);
+
+    // 잠근 글이면 방금 정한 비밀번호로 바로 열어 둡니다 (주인은 열 필요가 없습니다)
+    if (created.visibility === 'locked' && !cfg.owner) await rememberToken(created.id, password);
 
     // 글이 올라갔으니 여기서부터는 실패해도 글 화면으로 넘어갑니다.
     // 못 올린 첨부는 글 화면의 "HTML 올리기"로 다시 붙이면 됩니다.
@@ -693,10 +795,12 @@
   });
   els.wFileInput.addEventListener('change', pickPending);
   els.wFileClear.addEventListener('click', clearPending);
+  els.wVisibility.addEventListener('change', paintVisibilityHint);
 
   els.rBack.addEventListener('click', goToList);
   els.rEdit.addEventListener('click', () => openWrite(current));
   els.rDelete.addEventListener('click', removePost);
+  els.rUnlock.addEventListener('click', unlockCurrent);
   els.fileInput.addEventListener('change', uploadPicked);
   els.commentSave.addEventListener('click', addComment);
 
@@ -720,6 +824,9 @@
     // 닉네임/비밀번호 칸은 주인에게도 보여 줍니다. 비우면 '주인' 이름으로 달립니다.
     els.cOwnerNote.hidden = !cfg.owner;
     els.cTurnstile.hidden = cfg.owner || !captcha.enabled();
+
+    // 비공개는 주인만 고를 수 있습니다. 손님 화면에서는 선택지 자체를 뺍니다.
+    if (!cfg.owner) els.wVisPrivate.remove();
 
     // 안내문의 첨부 상한을 서버 값으로 맞춥니다
     for (const el of document.querySelectorAll('.js-file-max'))   el.textContent = sizeText(fileMax());

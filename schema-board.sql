@@ -21,7 +21,11 @@ CREATE TABLE IF NOT EXISTS posts (
   ipHash       TEXT    NOT NULL,
   commentCount INTEGER NOT NULL DEFAULT 0,
   createdAt    INTEGER NOT NULL,
-  updatedAt    INTEGER NOT NULL
+  updatedAt    INTEGER NOT NULL,
+  -- 공개 범위: public(공개) / locked(글 비밀번호로 열기) / private(주인만)
+  -- 이 열이 생기기 전에 만든 표에는 서버가 스스로 붙입니다(lib/schema.js).
+  -- 직접 붙이려면: ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'
+  visibility   TEXT    NOT NULL DEFAULT 'public'
 );
 
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts (createdAt DESC);

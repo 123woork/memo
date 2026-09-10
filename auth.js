@@ -9,6 +9,9 @@
    시간이 짧아서 서버에서 돌리면 시간 초과가 납니다. 그래서 계산은 여기서
    하고, 서버는 그 결과만 빠르게 대조합니다.
    비밀번호가 네트워크를 안 탄다는 이점도 같이 얻습니다.
+
+   사이트 비밀번호 바꾸기(changePassword)도 같은 계산을 씁니다.
+   지금 비밀번호와 새 비밀번호 모두 계산한 값만 서버로 갑니다.
    ========================================================================== */
 
 const Auth = (() => {
@@ -31,6 +34,13 @@ const Auth = (() => {
     return [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  /** 새 비밀번호에 쓸 무작위 salt (128비트). tools/hash.js 와 같은 길이입니다. */
+  function randomSaltHex() {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return bytesToHex(bytes);
+  }
+
   /** 비밀번호를 서버로 보낼 값으로 바꿉니다. 되돌릴 수 없습니다. */
   async function derive(password, saltHex, iterations) {
     const base = await crypto.subtle.importKey(
@@ -46,7 +56,11 @@ const Auth = (() => {
   async function post(url, options) {
     const res = await fetch(url, { credentials: 'same-origin', ...options });
     const body = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(body?.error || `오류 ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(body?.error || `오류 ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     return body;
   }
 
@@ -113,6 +127,29 @@ const Auth = (() => {
         await fetch('/api/login', { method: 'DELETE', credentials: 'same-origin' });
       } finally {
         location.reload();
+      }
+    },
+
+    /** 사이트 비밀번호를 바꿉니다 (functions/api/password.js).
+     *  지금 비밀번호로 계산한 값으로 본인임을 보이고, 새 비밀번호는 새로 뽑은
+     *  salt 로 계산한 값만 보냅니다. 원문은 이 함수 밖으로 나가지 않습니다.
+     *  세션이 끊겼으면 err.authRequired 가 붙어서 던져집니다. */
+    async changePassword(currentPassword, newPassword) {
+      const { salt, iterations } = await post('/api/login', { method: 'GET' });
+      const currentKey = await derive(currentPassword, salt, iterations);
+
+      const newSalt = randomSaltHex();
+      const key = await derive(newPassword, newSalt, iterations);
+
+      try {
+        await post('/api/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentKey, salt: newSalt, key, iterations })
+        });
+      } catch (err) {
+        if (err.status === 401) err.authRequired = true;
+        throw err;
       }
     }
   };

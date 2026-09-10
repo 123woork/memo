@@ -1,8 +1,15 @@
 /* ==========================================================================
    functions/api/board/files/:id/raw
-   GET   올라온 HTML을 그대로 내려줍니다. 로그인 없이 누구나 볼 수 있습니다.
+   GET   올라온 HTML을 그대로 내려줍니다.
 
-   ★ 이 파일이 이 기능의 안전장치 전부입니다. 헤더를 손대지 마세요. ★
+   누가 볼 수 있나 — 첨부가 달린 글을 볼 수 있는 사람만
+     공개 글   누구나
+     잠긴 글   주인, 또는 그 글의 열람 토큰을 주소에 단 사람 (?t=...)
+     비공개 글 주인만
+   볼 수 없으면 "없는 파일"(404)로 답합니다. 첨부 주소만 알아서는 저작권물
+   같은 잠긴 내용을 볼 수 없게 하려는 것입니다.
+
+   ★ 아래 CSP 헤더가 이 기능의 격리 장치 전부입니다. 손대지 마세요. ★
 
    왜 위험한가
      tisave.com 에서 실행되는 스크립트는 같은 출처이므로 fetch('/api/memos')
@@ -22,6 +29,8 @@
    이 응답의 CSP 가 다른 정책과 섞이지 않고 그대로 적용됩니다.
    ========================================================================== */
 
+import { accessOf, accessTokenOf } from '../../../../../lib/board.js';
+
 const SANDBOX = [
   // 이 문서를 고유 출처로 격리합니다. allow-same-origin 은 넣지 않습니다.
   'sandbox allow-scripts allow-forms allow-popups allow-modals',
@@ -29,18 +38,30 @@ const SANDBOX = [
   "frame-ancestors 'self'"
 ].join('; ');
 
-export async function onRequestGet({ params, env }) {
+function notFound() {
+  return new Response('없는 파일입니다.', {
+    status: 404,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+  });
+}
+
+export async function onRequestGet({ params, request, env, data }) {
   const row = await env.DB
-    .prepare('SELECT name, html FROM files WHERE id = ?')
+    .prepare(
+      'SELECT f.html, p.id AS postId, p.visibility' +
+      '  FROM files f JOIN posts p ON p.id = f.postId' +
+      ' WHERE f.id = ?'
+    )
     .bind(params.id)
     .first();
+  if (!row) return notFound();
 
-  if (!row) {
-    return new Response('없는 파일입니다.', {
-      status: 404,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
-    });
-  }
+  const access = await accessOf(
+    env,
+    { id: row.postId, visibility: row.visibility },
+    { owner: !!data.session, token: accessTokenOf(request) }
+  );
+  if (access !== 'full') return notFound();
 
   return new Response(row.html, {
     headers: {
@@ -48,7 +69,7 @@ export async function onRequestGet({ params, env }) {
       'Content-Security-Policy': SANDBOX,
       // 브라우저가 내용을 보고 타입을 멋대로 바꾸지 못하게 합니다
       'X-Content-Type-Options': 'nosniff',
-      // 이 페이지에서 밖으로 나가는 요청에 우리 주소를 알려주지 않습니다
+      // 이 페이지에서 밖으로 나가는 요청에 우리 주소(와 열람 토큰)를 알려주지 않습니다
       'Referrer-Policy': 'no-referrer',
       'Cache-Control': 'no-store'
     }

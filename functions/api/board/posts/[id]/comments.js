@@ -4,12 +4,14 @@
 
    댓글 읽기는 글 상세(GET /api/board/posts/:id)에 같이 실려 옵니다.
    댓글 삭제는 /api/board/comments/:id 에 있습니다.
-   관문은 새 글(posts.js)과 같습니다.
+   관문은 새 글(posts.js)과 같습니다. 잠긴 글에는 글을 연 사람(열람 토큰)만,
+   비공개 글에는 주인만 댓글을 달 수 있습니다.
    ========================================================================== */
 
 import { json, readJson, newId, insertStatement } from '../../../../../lib/auth.js';
 import {
-  LIMITS, cleanText, ipHashOf, botProblem, authorOf, rateProblem, publicComment
+  LIMITS, cleanText, ipHashOf, botProblem, authorOf, rateProblem,
+  accessOf, accessTokenOf, publicComment
 } from '../../../../../lib/board.js';
 
 export async function onRequestPost({ params, request, env, data }) {
@@ -20,12 +22,19 @@ export async function onRequestPost({ params, request, env, data }) {
   const bot = await botProblem(env, request, body, owner, '댓글을 저장하지 못했습니다.');
   if (bot) return json({ error: bot.error }, bot.status);
 
-  // 2) 달 글이 실제로 있는지
+  // 2) 달 글이 실제로 있고, 이 사람이 그 글을 볼 수 있는지
   const post = await env.DB
-    .prepare('SELECT id FROM posts WHERE id = ?')
+    .prepare('SELECT id, visibility FROM posts WHERE id = ?')
     .bind(params.id)
     .first();
-  if (!post) return json({ error: '글을 찾을 수 없습니다.' }, 404);
+  const access = post
+    ? await accessOf(env, post, { owner, token: accessTokenOf(request) })
+    : 'hidden';
+
+  if (access === 'hidden') return json({ error: '글을 찾을 수 없습니다.' }, 404);
+  if (access === 'locked') {
+    return json({ error: '잠긴 글입니다. 먼저 글 비밀번호로 여세요.' }, 403);
+  }
 
   // 3) 내용 검사
   const text = cleanText(body?.body, { multiline: true });

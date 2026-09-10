@@ -24,6 +24,7 @@ const el = {
   notice:   document.getElementById('notice'),
   count:    document.getElementById('count'),
   logout:   document.getElementById('logout'),
+  changePw: document.getElementById('change-pw'),
 };
 
 /** id → { memo, el, timeEl, bodyEl, lower }
@@ -353,6 +354,7 @@ el.editor.addEventListener('keydown', (e) => {
 el.hint.textContent = DEFAULT_HINT;
 
 el.logout.addEventListener('click', () => Auth.logout());
+el.changePw.addEventListener('click', () => PasswordChange.open());
 
 async function start() {
   el.notice.hidden = false;
@@ -378,6 +380,7 @@ async function start() {
   el.stream.appendChild(frag);
 
   el.logout.hidden = false;
+  el.changePw.hidden = false;
   updateCount();
   applyFilter();
   startTicker();

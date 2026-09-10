@@ -344,11 +344,40 @@
   margin-top: 0.75rem;
 }
 
-/* --- 비밀번호 묻는 창 ------------------------------------------------------ */
+/* --- 공개 범위 ----------------------------------------------------------- */
 
-.gate__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  margin-top: 0.9rem;
+/* 목록 제목 옆과 글 머리에 붙는 "잠금" / "비공개" 표시 */
+.badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 3px;
+  background: var(--accent-pale);
+  color: var(--accent);
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  vertical-align: 0.1em;
+}
+
+.badge--private {
+  background: #F3E6E4;
+  color: var(--danger);
+}
+
+/* 잠긴 글을 아직 열지 않았을 때 본문 자리에 뜨는 상자 */
+.locked {
+  margin-top: 0.5rem;
+  padding: 1rem;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.locked__msg {
+  margin: 0 0 0.75rem;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
 }

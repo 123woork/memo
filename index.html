@@ -19,6 +19,7 @@
   <div class="topbar__meta">
     <p class="topbar__count" id="count" aria-live="polite"></p>
     <a class="linkbtn" href="/board">게시판</a>
+    <button type="button" class="linkbtn" id="change-pw" hidden>비밀번호 바꾸기</button>
     <button type="button" class="linkbtn" id="logout" hidden>잠그기</button>
   </div>
 </header>
@@ -72,8 +73,27 @@
   </div>
 </div>
 
+<!-- 사이트 비밀번호 바꾸기. 로그인한 상태에서만 열립니다. -->
+<div class="gate" id="pw-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="pw-title">
+  <div class="gate__box">
+    <h2 class="gate__title" id="pw-title">비밀번호 바꾸기</h2>
+    <p class="gate__msg" id="pw-msg">지금 비밀번호와 새 비밀번호를 넣으세요. 바꾸면 다른 기기는 모두 잠깁니다.</p>
+    <input type="password" id="pw-current" class="gate__input"
+           autocomplete="current-password" placeholder="지금 비밀번호" aria-label="지금 비밀번호">
+    <input type="password" id="pw-new" class="gate__input gate__input--stack"
+           autocomplete="new-password" placeholder="새 비밀번호 (12자 이상)" aria-label="새 비밀번호">
+    <input type="password" id="pw-new2" class="gate__input gate__input--stack"
+           autocomplete="new-password" placeholder="새 비밀번호 한 번 더" aria-label="새 비밀번호 확인">
+    <div class="gate__actions">
+      <button type="button" class="btn btn--quiet" id="pw-cancel">취소</button>
+      <button type="button" class="btn btn--primary" id="pw-save">바꾸기</button>
+    </div>
+  </div>
+</div>
+
 <script src="auth.js"></script>
 <script src="storage.js"></script>
+<script src="password.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -5,35 +5,45 @@
 
    여기는 공개 영역입니다. _middleware.js 가 세션을 요구하지 않습니다.
    대신 글쓰기에는 아래 관문을 차례로 통과해야 합니다.
-     봇 검사(허니팟, 사람 확인) → 길이 검사 → 작성자/비밀번호 → 도배 제한
+     봇 검사(허니팟, 사람 확인) → 길이 검사 → 작성자/비밀번호 → 공개 범위 → 도배 제한
    주인(로그인 상태)은 사람 확인과 도배 제한을 건너뜁니다.
+
+   목록에서 남의 비공개 글은 빠지고, 잠긴 글은 제목이 "잠긴 글"로 가려집니다.
+   주인에게는 전부 그대로 보입니다.
    ========================================================================== */
 
 import { json, readJson, newId, insertStatement } from '../../../lib/auth.js';
 import {
-  LIMITS, cleanText, ipHashOf, botProblem, authorOf, rateProblem, publicPost
+  LIMITS, cleanText, cleanVisibility, visibilityProblem, ipHashOf,
+  botProblem, authorOf, rateProblem, publicPost
 } from '../../../lib/board.js';
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, data }) {
+  const owner = !!data.session;
   const url = new URL(request.url);
   const page = Math.max(1, parseInt(url.searchParams.get('page'), 10) || 1);
   const offset = (page - 1) * LIMITS.pageSize;
 
+  // 고정된 문자열만 이어 붙입니다. 사용자 입력은 SQL 에 섞이지 않습니다.
+  const where = owner ? '' : " WHERE visibility != 'private'";
+
   const counted = await env.DB
-    .prepare('SELECT COUNT(*) AS n FROM posts')
+    .prepare('SELECT COUNT(*) AS n FROM posts' + where)
     .first();
   const total = counted ? counted.n : 0;
 
   const { results } = await env.DB
     .prepare(
-      'SELECT id, title, nickname, isOwner, pwHash, commentCount, createdAt, updatedAt' +
-      '  FROM posts ORDER BY createdAt DESC LIMIT ? OFFSET ?'
+      'SELECT id, title, nickname, isOwner, pwHash, commentCount, visibility, createdAt, updatedAt' +
+      '  FROM posts' + where + ' ORDER BY createdAt DESC LIMIT ? OFFSET ?'
     )
     .bind(LIMITS.pageSize, offset)
     .all();
 
   return json({
-    posts: (results || []).map(row => publicPost(row)),
+    posts: (results || []).map(row =>
+      publicPost(row, { locked: !owner && row.visibility === 'locked' })
+    ),
     page,
     pageSize: LIMITS.pageSize,
     total,
@@ -63,7 +73,12 @@ export async function onRequestPost({ request, env, data }) {
   const author = await authorOf(body, owner);
   if (author.error) return json({ error: author.error }, 400);
 
-  // 4) 도배 제한 (주인은 건너뜀). 마지막에 두어 헛되이 카운터를 쓰지 않습니다.
+  // 4) 공개 범위. 잠금은 글 비밀번호가, 비공개는 주인 세션이 있어야 합니다.
+  const visibility = cleanVisibility(body?.visibility);
+  const denied = visibilityProblem(visibility, { owner, hasPassword: !!author.pwHash });
+  if (denied) return json({ error: denied.error }, denied.status);
+
+  // 5) 도배 제한 (주인은 건너뜀). 마지막에 두어 헛되이 카운터를 쓰지 않습니다.
   const now = Date.now();
   const ipHash = await ipHashOf(env, request);
   if (!owner) {
@@ -74,6 +89,7 @@ export async function onRequestPost({ request, env, data }) {
   const post = {
     id: newId(), title, body: text,
     ...author,                         // nickname, isOwner, pwSalt, pwHash
+    visibility,
     ipHash, commentCount: 0,
     createdAt: now, updatedAt: now
   };

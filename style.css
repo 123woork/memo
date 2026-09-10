@@ -365,3 +365,14 @@ body {
   margin-top: 0.6rem;
   padding: 0.65rem;
 }
+
+/* 입력칸이 여러 개인 창(비밀번호 바꾸기)에서 두 번째 칸부터 */
+.gate__input--stack { margin-top: 0.5rem; }
+
+/* 취소 / 확인 버튼 줄. 게시판의 비밀번호 창도 같이 씁니다. */
+.gate__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}

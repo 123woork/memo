@@ -77,6 +77,16 @@
       </span>
     </label>
 
+    <label class="field" id="w-visibility-field">
+      <span class="field__label">공개 범위</span>
+      <select id="w-visibility" class="field__input">
+        <option value="public">공개 — 누구나 봅니다</option>
+        <option value="locked">잠금 — 글 비밀번호를 아는 사람만 내용을 봅니다</option>
+        <option value="private" id="w-visibility-private">비공개 — 주인만 봅니다</option>
+      </select>
+      <span class="field__hint" id="w-visibility-hint" hidden></span>
+    </label>
+
     <label class="field">
       <span class="field__label">내용</span>
       <textarea id="w-body" class="field__area" rows="12"></textarea>
@@ -125,8 +135,16 @@
         <span class="post__dot">·</span>
         <span id="r-date"></span>
         <span class="post__edited" id="r-edited" hidden>(수정됨)</span>
+        <span class="badge" id="r-visibility" hidden></span>
       </p>
       <div class="post__body" id="r-body"></div>
+
+      <!-- 잠긴 글을 아직 열지 않았을 때. 내용·댓글·첨부 대신 이것만 보입니다. -->
+      <div class="locked" id="r-locked" hidden>
+        <p class="locked__msg">잠긴 글입니다. 글 비밀번호를 넣으면 제목과 내용, 댓글, 첨부가 보입니다.</p>
+        <button type="button" class="btn btn--primary" id="r-unlock">열기</button>
+        <p class="field__msg" id="r-unlock-msg" aria-live="polite"></p>
+      </div>
     </article>
 
     <div class="view__actions" id="r-actions">
@@ -154,7 +172,7 @@
       <p class="field__msg" id="file-msg" aria-live="polite"></p>
     </section>
 
-    <section class="comments" aria-labelledby="c-heading">
+    <section class="comments" id="comments-section" aria-labelledby="c-heading">
       <h3 class="comments__heading" id="c-heading">댓글 <span id="c-count">0</span></h3>
 
       <ul class="comments__list" id="comment-list"></ul>
