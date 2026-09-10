@@ -6,11 +6,11 @@
    사이트 주인으로 로그인해 있으면 지울 수 있습니다.
    ========================================================================== */
 
-import { json } from '../../../../lib/auth.js';
-import { passwordMatches } from '../../../../lib/board.js';
+import { json, readJson } from '../../../../lib/auth.js';
+import { mayModify } from '../../../../lib/board.js';
 
 export async function onRequestDelete({ params, request, env, data }) {
-  const body = await request.json().catch(() => null);
+  const body = await readJson(request);
 
   const comment = await env.DB
     .prepare('SELECT id, postId, pwSalt, pwHash FROM comments WHERE id = ?')
@@ -19,8 +19,9 @@ export async function onRequestDelete({ params, request, env, data }) {
 
   if (!comment) return json({ error: '댓글을 찾을 수 없습니다.' }, 404);
 
-  const allowed = data.session || await passwordMatches(body?.password, comment);
-  if (!allowed) return json({ error: '비밀번호가 맞지 않습니다.' }, 403);
+  if (!(await mayModify(comment, body, data.session))) {
+    return json({ error: '비밀번호가 맞지 않습니다.' }, 403);
+  }
 
   // 댓글을 지우고 글의 댓글 수를 같이 내립니다.
   // 0 밑으로 내려가지 않게 막아 둡니다.

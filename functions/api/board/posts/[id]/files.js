@@ -10,15 +10,15 @@
    파일 목록은 글 상세(GET /api/board/posts/:id)에 같이 실려 옵니다.
    ========================================================================== */
 
-import { json } from '../../../../../lib/auth.js';
-import { LIMITS, cleanFileName, newId, publicFile } from '../../../../../lib/board.js';
+import { json, readJson, newId, insertStatement } from '../../../../../lib/auth.js';
+import { LIMITS, cleanFileName, publicFile } from '../../../../../lib/board.js';
 
 export async function onRequestPost({ params, request, env, data }) {
   if (!data.session) {
     return json({ error: 'HTML 첨부는 주인만 할 수 있습니다. 먼저 로그인하세요.' }, 403);
   }
 
-  const body = await request.json().catch(() => null);
+  const body = await readJson(request);
   const html = typeof body?.html === 'string' ? body.html : '';
 
   if (!html.trim()) {
@@ -28,8 +28,8 @@ export async function onRequestPost({ params, request, env, data }) {
   // 글자 수가 아니라 실제 바이트로 잽니다. 한글은 한 글자가 3바이트입니다.
   const size = new TextEncoder().encode(html).length;
   if (size > LIMITS.fileBytes) {
-    const mb = Math.round(LIMITS.fileBytes / 1000);
-    return json({ error: '파일이 너무 큽니다. ' + mb + 'KB까지 올릴 수 있습니다.' }, 400);
+    const kb = Math.round(LIMITS.fileBytes / 1000);
+    return json({ error: '파일이 너무 큽니다. ' + kb + 'KB까지 올릴 수 있습니다.' }, 400);
   }
 
   const post = await env.DB
@@ -54,13 +54,8 @@ export async function onRequestPost({ params, request, env, data }) {
     createdAt: Date.now()
   };
 
-  await env.DB
-    .prepare(
-      'INSERT INTO files (id, postId, name, html, size, createdAt)' +
-      ' VALUES (?, ?, ?, ?, ?, ?)'
-    )
-    .bind(file.id, file.postId, file.name, html, file.size, file.createdAt)
-    .run();
+  // html 본문은 저장만 하고 응답에는 싣지 않습니다 (publicFile 참고)
+  await insertStatement(env.DB, 'files', { ...file, html }).run();
 
   return json(publicFile(file), 201);
 }

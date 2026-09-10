@@ -5,24 +5,20 @@
    ========================================================================== */
 
 import { json } from '../../../lib/auth.js';
+import { readMemoText } from '../../../lib/memos.js';
 
-const MAX_LENGTH = 20000;
+const NOT_FOUND = '메모를 찾을 수 없습니다.';
 
 export async function onRequestPut({ params, request, env }) {
-  const body = await request.json().catch(() => null);
-  const text = typeof body?.text === 'string' ? body.text.trim() : '';
-
-  if (!text) return json({ error: '내용이 비어 있습니다.' }, 400);
-  if (text.length > MAX_LENGTH) {
-    return json({ error: `메모는 ${MAX_LENGTH}자까지 저장할 수 있습니다.` }, 400);
-  }
+  const { text, error } = await readMemoText(request);
+  if (error) return json({ error }, 400);
 
   const result = await env.DB
     .prepare('UPDATE memos SET text = ?, updatedAt = ? WHERE id = ?')
     .bind(text, Date.now(), params.id)
     .run();
 
-  if (!result.meta.changes) return json({ error: '메모를 찾을 수 없습니다.' }, 404);
+  if (!result.meta.changes) return json({ error: NOT_FOUND }, 404);
 
   const memo = await env.DB
     .prepare('SELECT id, text, createdAt, updatedAt FROM memos WHERE id = ?')
@@ -38,6 +34,6 @@ export async function onRequestDelete({ params, env }) {
     .bind(params.id)
     .run();
 
-  if (!result.meta.changes) return json({ error: '메모를 찾을 수 없습니다.' }, 404);
+  if (!result.meta.changes) return json({ error: NOT_FOUND }, 404);
   return json({ ok: true });
 }

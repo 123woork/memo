@@ -1,21 +1,16 @@
 /* ==========================================================================
-   app.js — 화면을 그리고 사용자의 동작을 처리합니다.
-   저장 위치는 전혀 모릅니다. MemoStore에게 시키기만 합니다.
+   app.js — 메모장 화면을 그리고 사용자의 동작을 처리합니다.
+   저장 위치는 모릅니다. 서버 호출은 MemoStore(storage.js)에게 시킵니다.
 
-   [고친 것]
-   1. 전에는 저장·수정·삭제·검색 때마다 render()가 목록 DOM을 전부 부수고
-      다시 만들었습니다. 검색창에 "안녕"을 치면 두 번 전부 재생성됐습니다.
-      지금은 각 메모의 DOM을 딱 한 번만 만들고 rows 맵에 들고 있습니다.
-      - 검색: 만들어 둔 행을 숨기고 보이기만 합니다 (DOM 생성 없음)
-      - 저장: 새 행 하나만 맨 앞에 끼웁니다
-      - 수정: 그 행의 글자만 바꿉니다
-      - 삭제: 그 행만 떼어냅니다
-      목록 전체를 다시 만드는 경로가 이제 없습니다.
-
-   2. 1분 타이머가 행마다 memos.find()를 돌려 O(n²)이었습니다.
-      지금은 "시간 표시가 아직 변할 수 있는" 메모만 live 집합에 담아두고,
-      그것만 훑습니다. 다 굳으면 타이머를 아예 멈춥니다.
-      안 보이는 탭에서는 일하지 않습니다.
+   성능 규칙 — 되돌리지 마세요
+   1. 메모마다 DOM 을 딱 한 번만 만들고 rows 맵에 들고 있습니다.
+      목록 전체를 다시 그리는 경로는 없습니다.
+        검색  만들어 둔 행의 hidden 만 바꿉니다 (DOM 생성 없음)
+        저장  새 행 하나만 맨 앞에 끼웁니다          insertRow
+        수정  그 행의 글자만 바꿉니다                refreshRow
+        삭제  그 행만 떼어냅니다                    dropRow
+   2. 1분 타이머는 "시간 표시가 아직 변할 수 있는" 메모(live)만 훑습니다.
+      다 굳으면 타이머를 멈추고, 안 보이는 탭에서는 일하지 않습니다.
    ========================================================================== */
 
 const el = {
@@ -49,16 +44,18 @@ let busy = false;          // 서버 응답을 기다리는 중인지
    저장된 줄 알기 때문에, 입력창 아래 안내 자리에 띄웁니다.
    -------------------------------------------------------------------------- */
 
-let defaultHint = '';
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const DEFAULT_HINT = `${isMac ? '⌘' : 'Ctrl'} + Enter로 저장`;
 let hintTimer = null;
 
+/** 오류를 6초 동안 보여 주고 원래 안내로 돌아갑니다. */
 function flash(message) {
   clearTimeout(hintTimer);
   el.hint.textContent = message;
   el.hint.classList.add('composer__hint--error');
   hintTimer = setTimeout(() => {
     el.hint.classList.remove('composer__hint--error');
-    el.hint.textContent = defaultHint;
+    el.hint.textContent = DEFAULT_HINT;
   }, 6000);
 }
 
@@ -353,11 +350,7 @@ el.editor.addEventListener('keydown', (e) => {
 
 /* --- 시작 ---------------------------------------------------------------- */
 
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-defaultHint = MemoStore.isTemporary()
-  ? '이 브라우저에서는 저장이 유지되지 않습니다. 새로고침하면 사라집니다.'
-  : `${isMac ? '⌘' : 'Ctrl'} + Enter로 저장`;
-el.hint.textContent = defaultHint;
+el.hint.textContent = DEFAULT_HINT;
 
 el.logout.addEventListener('click', () => Auth.logout());
 

@@ -54,8 +54,9 @@ schema.sql  schema-board.sql                            D1 테이블 정의
 _headers                                                보안 헤더 (CSP 등)
 
 lib/
-  auth.js          [서버] 세션, 쿠키, 해시, 상수시간 비교
-  board.js         [서버] 입력 정리, 글 비밀번호, 봇 차단, 도배 제한
+  auth.js          [서버 공용] 세션, 쿠키, 해시, 상수시간 비교, 요청 읽기, id, INSERT 도우미
+  memos.js         [서버] 메모 글 검사
+  board.js         [서버] 입력 정리, 글 비밀번호, 봇 차단, 도배 제한, 글·댓글 공통 관문
 
 tools/
   hash.html        사이트 비밀번호 → 환경변수 값 생성기 (로컬에서 엽니다)

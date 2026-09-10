@@ -14,7 +14,7 @@
    ========================================================================== */
 
 import {
-  json, sha256Hex, timingSafeEqual, getCookie, randomToken,
+  json, readJson, clientIp, sha256Hex, timingSafeEqual, getCookie, randomToken,
   sessionCookie, clearedCookie, findSession, sameOrigin,
   SESSION_COOKIE, SESSION_TTL
 } from '../../lib/auth.js';
@@ -48,7 +48,7 @@ export async function onRequestPost({ request, env }) {
   if (problem) return json({ error: problem }, 500);
   if (!sameOrigin(request)) return json({ error: '잘못된 요청입니다.' }, 403);
 
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const ip = clientIp(request);
   const now = Date.now();
 
   // 잠겨 있는지 먼저 확인
@@ -61,7 +61,7 @@ export async function onRequestPost({ request, env }) {
     return json({ error: `시도가 너무 많습니다. ${seconds}초 후에 다시 해보세요.` }, 429);
   }
 
-  const body = await request.json().catch(() => null);
+  const body = await readJson(request);
   const key  = typeof body?.key === 'string' ? body.key : '';
 
   const given    = await sha256Hex(key);

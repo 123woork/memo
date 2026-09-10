@@ -11,17 +11,13 @@
    대괄호 파일명은 Pages Functions 의 동적 라우트 문법입니다. 바꾸지 마세요.
    ========================================================================== */
 
-import { json } from '../../../../lib/auth.js';
+import { json, readJson } from '../../../../lib/auth.js';
 import {
-  LIMITS, cleanText, passwordMatches, publicPost, publicComment, publicFile
+  LIMITS, cleanText, mayModify, publicPost, publicComment, publicFile
 } from '../../../../lib/board.js';
 
-/** 이 요청이 글을 고칠 자격이 있는지.
- *  주인이면 비밀번호를 묻지 않습니다. */
-async function mayEdit(row, body, data) {
-  if (data.session) return true;
-  return passwordMatches(body?.password, row);
-}
+const NOT_FOUND = '글을 찾을 수 없습니다.';
+const WRONG_PASSWORD = '비밀번호가 맞지 않습니다.';
 
 async function loadPost(env, id) {
   return env.DB
@@ -36,7 +32,7 @@ async function loadPost(env, id) {
 
 export async function onRequestGet({ params, env }) {
   const post = await loadPost(env, params.id);
-  if (!post) return json({ error: '글을 찾을 수 없습니다.' }, 404);
+  if (!post) return json({ error: NOT_FOUND }, 404);
 
   const { results } = await env.DB
     .prepare(
@@ -64,13 +60,13 @@ export async function onRequestGet({ params, env }) {
 }
 
 export async function onRequestPut({ params, request, env, data }) {
-  const body = await request.json().catch(() => null);
+  const body = await readJson(request);
 
   const post = await loadPost(env, params.id);
-  if (!post) return json({ error: '글을 찾을 수 없습니다.' }, 404);
+  if (!post) return json({ error: NOT_FOUND }, 404);
 
-  if (!(await mayEdit(post, body, data))) {
-    return json({ error: '비밀번호가 맞지 않습니다.' }, 403);
+  if (!(await mayModify(post, body, data.session))) {
+    return json({ error: WRONG_PASSWORD }, 403);
   }
 
   const title = cleanText(body?.title).slice(0, LIMITS.title);
@@ -95,13 +91,13 @@ export async function onRequestPut({ params, request, env, data }) {
 }
 
 export async function onRequestDelete({ params, request, env, data }) {
-  const body = await request.json().catch(() => null);
+  const body = await readJson(request);
 
   const post = await loadPost(env, params.id);
-  if (!post) return json({ error: '글을 찾을 수 없습니다.' }, 404);
+  if (!post) return json({ error: NOT_FOUND }, 404);
 
-  if (!(await mayEdit(post, body, data))) {
-    return json({ error: '비밀번호가 맞지 않습니다.' }, 403);
+  if (!(await mayModify(post, body, data.session))) {
+    return json({ error: WRONG_PASSWORD }, 403);
   }
 
   // 댓글과 첨부를 먼저 지우고 글을 지웁니다.
